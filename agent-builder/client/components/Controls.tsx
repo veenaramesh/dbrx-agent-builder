@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
   Bot, Cpu, Search, Wrench, X, Copy, Check,
-  ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon,
+  ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, FolderArchive,
 } from 'lucide-react';
 import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS } from '../constants';
@@ -586,16 +586,24 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, nodeId, onDelete
 interface CodeExportModalProps {
   code: string;
   onClose: () => void;
+  onDownloadZip: () => Promise<void>;
 }
 
-export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose }) => {
+export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose, onDownloadZip }) => {
   const [copied, setCopied] = useState(false);
+  const [zipping, setZipping] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  const handleZip = async () => {
+    setZipping(true);
+    await onDownloadZip();
+    setZipping(false);
   };
 
   return (
@@ -612,15 +620,23 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose 
           <div className="flex items-center gap-2">
             <Code2 size={16} className="text-[#FF3621]" />
             <span className="text-sm font-bold text-white">Generated Agent Code</span>
-            <span className="text-[10px] text-slate-400 bg-[#243f49] px-2 py-0.5 rounded-full">Python</span>
+            <span className="text-[10px] text-slate-400 bg-[#243f49] px-2 py-0.5 rounded-full">Python · DAB</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleCopy}
-              className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-[#FF3621] hover:bg-[#e02d1a] text-white transition-colors"
+              className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-[#243f49] hover:bg-[#2e5060] border border-[#34606f] text-white transition-colors"
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
-              {copied ? 'Copied!' : 'Copy'}
+              {copied ? 'Copied!' : 'Copy src/agent.py'}
+            </button>
+            <button
+              onClick={handleZip}
+              disabled={zipping}
+              className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-[#FF3621] hover:bg-[#e02d1a] text-white transition-colors disabled:opacity-60"
+            >
+              <FolderArchive size={13} />
+              {zipping ? 'Zipping…' : 'Download DAB (.zip)'}
             </button>
             <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded transition-colors">
               <X size={16} />
@@ -628,17 +644,33 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose 
           </div>
         </div>
 
-        {/* Code */}
+        {/* File tree preview */}
+        <div className="px-4 pt-3 pb-1 border-b border-[#34606f]">
+          <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5">Bundle contents</p>
+          <div className="flex gap-4 text-[10px] font-mono text-slate-400">
+            {[
+              'databricks.yml',
+              'resources/agent_deployment.yml',
+              'requirements.txt',
+              'src/agent.py',
+              'README.md',
+            ].map(f => (
+              <span key={f} className="bg-[#243f49] px-2 py-0.5 rounded">{f}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Code — shows src/agent.py */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+          <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest mb-2">src/agent.py</p>
           <pre className="text-[11px] text-[#e2e8f0] font-mono leading-relaxed whitespace-pre">
             {code}
           </pre>
         </div>
 
-        {/* Footer hint */}
+        {/* Footer */}
         <div className="px-4 py-2.5 border-t border-[#34606f] text-[10px] text-slate-500">
-          Scaffold generated from your canvas. Wire up your business logic inside the agent's
-          <code className="text-slate-300 mx-1">predict()</code>method, then deploy with MLflow.
+          Download the ZIP, then run <code className="text-slate-300 mx-1">databricks bundle deploy</code> to deploy to your workspace.
         </div>
       </div>
     </div>

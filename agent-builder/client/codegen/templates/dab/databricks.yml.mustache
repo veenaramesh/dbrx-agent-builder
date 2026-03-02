@@ -1,0 +1,18 @@
+bundle:
+  name: {{{bundleName}}}
+
+variables:
+  catalog:
+    description: "Unity Catalog catalog for model registration"
+    default: main
+  schema:
+    description: "Unity Catalog schema for model registration"
+    default: agents
+
+targets:
+  dev:
+    mode: development
+    default: true
+
+  prod:
+    mode: production
