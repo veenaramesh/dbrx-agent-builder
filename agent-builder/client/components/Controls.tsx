@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
   Bot, Cpu, Search, Wrench, X, Copy, Check,
-  ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, FolderArchive,
+  ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon,
 } from 'lucide-react';
 import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS } from '../constants';
@@ -583,15 +583,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, nodeId, onDelete
 
 // ── Code Export Modal ─────────────────────────────────────────────────────────
 
+const DAB_INIT_COMMAND = 'databricks bundle init https://github.com/veenaramesh/agentops-demo --config-file config.json';
+
 interface CodeExportModalProps {
   code: string;
   onClose: () => void;
-  onDownloadZip: () => Promise<void>;
 }
 
-export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose, onDownloadZip }) => {
+export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose }) => {
   const [copied, setCopied] = useState(false);
-  const [zipping, setZipping] = useState(false);
+  const [copiedCmd, setCopiedCmd] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code).then(() => {
@@ -600,10 +601,11 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose,
     });
   };
 
-  const handleZip = async () => {
-    setZipping(true);
-    await onDownloadZip();
-    setZipping(false);
+  const handleCopyCmd = () => {
+    navigator.clipboard.writeText(DAB_INIT_COMMAND).then(() => {
+      setCopiedCmd(true);
+      setTimeout(() => setCopiedCmd(false), 2000);
+    });
   };
 
   return (
@@ -628,15 +630,14 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose,
               className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-[#243f49] hover:bg-[#2e5060] border border-[#34606f] text-white transition-colors"
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
-              {copied ? 'Copied!' : 'Copy src/agent.py'}
+              {copied ? 'Copied!' : 'Copy agent.py'}
             </button>
             <button
-              onClick={handleZip}
-              disabled={zipping}
-              className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-[#FF3621] hover:bg-[#e02d1a] text-white transition-colors disabled:opacity-60"
+              onClick={handleCopyCmd}
+              className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-[#FF3621] hover:bg-[#e02d1a] text-white transition-colors"
             >
-              <FolderArchive size={13} />
-              {zipping ? 'Zipping…' : 'Download DAB (.zip)'}
+              {copiedCmd ? <Check size={13} /> : <CopyIcon size={13} />}
+              {copiedCmd ? 'Copied!' : 'Copy DAB command'}
             </button>
             <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded transition-colors">
               <X size={16} />

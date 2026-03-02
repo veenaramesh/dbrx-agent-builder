@@ -22,7 +22,6 @@ import {
   isNodeIntersectingRect,
   generateAgentCode,
 } from '../utils';
-import { downloadProjectZip } from '../codegen/project';
 import { NodeView } from '../components/NodeView';
 import { EdgeView } from '../components/EdgeView';
 import {
@@ -733,7 +732,6 @@ export function AgentEditor() {
         <CodeExportModal
           code={generatedCode}
           onClose={() => setShowCodeExport(false)}
-          onDownloadZip={() => downloadProjectZip(nodes, edges, agentName)}
         />
       )}
     </div>
