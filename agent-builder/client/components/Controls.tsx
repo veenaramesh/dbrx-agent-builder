@@ -650,8 +650,7 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose,
           <div className="flex gap-4 text-[10px] font-mono text-slate-400">
             {[
               'config.json',
-              'src/agent.py',
-              'README.md',
+              'agent.py',
             ].map(f => (
               <span key={f} className="bg-[#243f49] px-2 py-0.5 rounded">{f}</span>
             ))}

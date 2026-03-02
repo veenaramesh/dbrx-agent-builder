@@ -1,9 +1,6 @@
-import Mustache from 'mustache';
 import JSZip from 'jszip';
 import { AgentNodeData, EdgeData } from '../types';
 import { generateAgentCode } from './index';
-
-import readmeTpl from './templates/dab/readme.mustache?raw';
 
 // ── Config JSON ───────────────────────────────────────────────────────────────
 // Maps canvas state → key-value pairs for:
@@ -56,49 +53,6 @@ export const buildBundleConfig = (
   };
 };
 
-// ── Project files ─────────────────────────────────────────────────────────────
-
-export interface ProjectFile {
-  path: string;
-  content: string;
-}
-
-export const generateProject = (
-  nodes: AgentNodeData[],
-  edges: EdgeData[],
-  agentName: string
-): ProjectFile[] => {
-  const config     = buildBundleConfig(nodes, agentName);
-  const vsNodes    = nodes.filter(n => n.type === 'vector_search');
-  const ucfNodes   = nodes.filter(n => n.type === 'uc_function');
-  const llmNode    = nodes.find(n => n.type === 'llm');
-  const llmCfg     = llmNode?.config as { endpointName: string } | undefined;
-
-  const readmeView = {
-    agentName,
-    projectName:         config.project_name,
-    hasVectorSearch:     vsNodes.length > 0,
-    hasUCFunctions:      ucfNodes.length > 0,
-    llmEndpoint:         llmCfg?.endpointName ?? '',
-    includeEvaluation:   true,
-  };
-
-  return [
-    {
-      path:    'config.json',
-      content: JSON.stringify(config, null, 2),
-    },
-    {
-      path:    'src/agent.py',
-      content: generateAgentCode(nodes, edges, agentName),
-    },
-    {
-      path:    'README.md',
-      content: Mustache.render(readmeTpl, readmeView),
-    },
-  ];
-};
-
 // ── ZIP download ──────────────────────────────────────────────────────────────
 
 export const downloadProjectZip = async (
@@ -106,12 +60,11 @@ export const downloadProjectZip = async (
   edges: EdgeData[],
   agentName: string
 ): Promise<void> => {
-  const config  = buildBundleConfig(nodes, agentName);
-  const files   = generateProject(nodes, edges, agentName);
+  const config = buildBundleConfig(nodes, agentName);
 
-  const zip     = new JSZip();
-  const folder  = zip.folder(config.project_name)!;
-  files.forEach(({ path, content }) => folder.file(path, content));
+  const zip    = new JSZip();
+  zip.file('config.json', JSON.stringify(config, null, 2));
+  zip.file('agent.py', generateAgentCode(nodes, edges, agentName));
 
   const blob = await zip.generateAsync({ type: 'blob' });
   const url  = URL.createObjectURL(blob);
