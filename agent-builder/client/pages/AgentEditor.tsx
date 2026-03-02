@@ -22,6 +22,7 @@ import {
   isNodeIntersectingRect,
   generateAgentCode,
 } from '../utils';
+import { buildBundleConfig } from '../codegen/project';
 import { NodeView } from '../components/NodeView';
 import { EdgeView } from '../components/EdgeView';
 import {
@@ -578,6 +579,7 @@ export function AgentEditor() {
   // ── Code export ───────────────────────────────────────────────────────────
 
   const generatedCode = generateAgentCode(nodes, edges, agentName);
+  const generatedConfig = JSON.stringify(buildBundleConfig(nodes, agentName), null, 2);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -731,6 +733,7 @@ export function AgentEditor() {
       {showCodeExport && (
         <CodeExportModal
           code={generatedCode}
+          configJson={generatedConfig}
           onClose={() => setShowCodeExport(false)}
         />
       )}

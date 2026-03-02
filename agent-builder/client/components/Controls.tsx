@@ -587,15 +587,20 @@ const DAB_INIT_COMMAND = 'databricks bundle init https://github.com/veenaramesh/
 
 interface CodeExportModalProps {
   code: string;
+  configJson: string;
   onClose: () => void;
 }
 
-export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose }) => {
+export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJson, onClose }) => {
+  const [tab, setTab] = useState<'agent' | 'config'>('agent');
   const [copied, setCopied] = useState(false);
   const [copiedCmd, setCopiedCmd] = useState(false);
 
+  const activeContent = tab === 'agent' ? code : configJson;
+  const activeLabel   = tab === 'agent' ? 'agent.py' : 'config.json';
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(code).then(() => {
+    navigator.clipboard.writeText(activeContent).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -622,7 +627,6 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose 
           <div className="flex items-center gap-2">
             <Code2 size={16} className="text-[#FF3621]" />
             <span className="text-sm font-bold text-white">Generated Agent Code</span>
-            <span className="text-[10px] text-slate-400 bg-[#243f49] px-2 py-0.5 rounded-full">Python · DAB</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -630,7 +634,7 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose 
               className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-[#243f49] hover:bg-[#2e5060] border border-[#34606f] text-white transition-colors"
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
-              {copied ? 'Copied!' : 'Copy agent.py'}
+              {copied ? 'Copied!' : `Copy ${activeLabel}`}
             </button>
             <button
               onClick={handleCopyCmd}
@@ -645,24 +649,31 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose 
           </div>
         </div>
 
-        {/* File tree preview */}
-        <div className="px-4 pt-3 pb-1 border-b border-[#34606f]">
-          <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5">ZIP contents</p>
-          <div className="flex gap-4 text-[10px] font-mono text-slate-400">
-            {[
-              'config.json',
-              'agent.py',
-            ].map(f => (
-              <span key={f} className="bg-[#243f49] px-2 py-0.5 rounded">{f}</span>
-            ))}
-          </div>
+        {/* Tabs */}
+        <div className="flex border-b border-[#34606f]">
+          {(['agent', 'config'] as const).map((t) => {
+            const label = t === 'agent' ? 'agent.py' : 'config.json';
+            const active = tab === t;
+            return (
+              <button
+                key={t}
+                onClick={() => { setTab(t); setCopied(false); }}
+                className={`px-4 py-2 text-[11px] font-mono font-medium border-b-2 transition-colors ${
+                  active
+                    ? 'border-[#FF3621] text-white'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Code — shows src/agent.py */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
-          <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest mb-2">src/agent.py</p>
           <pre className="text-[11px] text-[#e2e8f0] font-mono leading-relaxed whitespace-pre">
-            {code}
+            {activeContent}
           </pre>
         </div>
 
