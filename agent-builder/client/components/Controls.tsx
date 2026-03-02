@@ -646,12 +646,10 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose,
 
         {/* File tree preview */}
         <div className="px-4 pt-3 pb-1 border-b border-[#34606f]">
-          <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5">Bundle contents</p>
+          <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest mb-1.5">ZIP contents</p>
           <div className="flex gap-4 text-[10px] font-mono text-slate-400">
             {[
-              'databricks.yml',
-              'resources/agent_deployment.yml',
-              'requirements.txt',
+              'config.json',
               'src/agent.py',
               'README.md',
             ].map(f => (
@@ -670,7 +668,7 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, onClose,
 
         {/* Footer */}
         <div className="px-4 py-2.5 border-t border-[#34606f] text-[10px] text-slate-500">
-          Download the ZIP, then run <code className="text-slate-300 mx-1">databricks bundle deploy</code> to deploy to your workspace.
+          Run <code className="text-slate-300 mx-1">databricks bundle init https://github.com/veenaramesh/agentops-demo --config-file config.json</code> to scaffold your project.
         </div>
       </div>
     </div>
