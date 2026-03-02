@@ -1,0 +1,70 @@
+
+export type AgentNodeType = 'agent' | 'llm' | 'vector_search' | 'uc_function';
+
+export interface LLMConfig {
+  endpointName: string;
+  model: string;
+  maxTokens: number;
+  temperature: number;
+  systemPrompt: string;
+}
+
+export interface VectorSearchConfig {
+  endpointName: string;
+  indexName: string;
+  columns: string;
+  numResults: number;
+  textColumn: string;
+}
+
+export interface UCFunctionConfig {
+  catalog: string;
+  schema: string;
+  functionName: string;
+  description: string;
+}
+
+export interface AgentConfig {
+  description: string;
+  maxIterations: number;
+}
+
+export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | AgentConfig;
+
+export interface AgentNodeData {
+  id: string;
+  type: AgentNodeType;
+  label: string;
+  config: NodeConfig;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  locked?: boolean;
+}
+
+export interface EdgeData {
+  id: string;
+  source: string;
+  target: string;
+  sourcePort: PortPosition;
+  targetPort: PortPosition;
+  label?: string;
+}
+
+export type PortPosition = 'top' | 'right' | 'bottom' | 'left';
+
+export interface ViewportTransform {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+export type ToolType = 'select' | 'hand' | 'connect';
+
+export interface SelectionBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
