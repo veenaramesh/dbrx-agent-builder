@@ -1,0 +1,6 @@
+.env.development
+.env.local
+.env*.local
+node_modules/
+dist/
+.DS_Store

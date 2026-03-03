@@ -1,6 +1,4 @@
-import JSZip from 'jszip';
 import { AgentNodeData, EdgeData } from '../types';
-import { generateAgentCode } from './index';
 
 // ── Config JSON ───────────────────────────────────────────────────────────────
 // Maps canvas state → key-value pairs for:
@@ -62,11 +60,16 @@ export const downloadProjectZip = async (
 ): Promise<void> => {
   const config = buildBundleConfig(nodes, agentName);
 
-  const zip    = new JSZip();
-  zip.file('config.json', JSON.stringify(config, null, 2));
-  zip.file('agent.py', generateAgentCode(nodes, edges, agentName));
+  const response = await fetch(
+    `${import.meta.env.VITE_API_URL}/generate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    }
+  );
 
-  const blob = await zip.generateAsync({ type: 'blob' });
+  const blob = await response.blob();
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
