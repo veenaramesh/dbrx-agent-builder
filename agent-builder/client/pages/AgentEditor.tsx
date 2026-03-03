@@ -22,7 +22,7 @@ import {
   isNodeIntersectingRect,
   generateAgentCode,
 } from '../utils';
-import { buildBundleConfig } from '../codegen/project';
+import { buildBundleConfig, downloadProjectZip } from '../codegen/project';
 import { NodeView } from '../components/NodeView';
 import { EdgeView } from '../components/EdgeView';
 import {
@@ -101,6 +101,7 @@ export function AgentEditor() {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<CtxMenu | null>(null);
   const [showCodeExport, setShowCodeExport] = useState(false);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
   // Undo / redo
   const historyRef = useRef<{ nodes: AgentNodeData[]; edges: EdgeData[] }[]>([]);
@@ -581,6 +582,15 @@ export function AgentEditor() {
   const generatedCode = generateAgentCode(nodes, edges, agentName);
   const generatedConfig = JSON.stringify(buildBundleConfig(nodes, agentName), null, 2);
 
+  const handleDownloadZip = async () => {
+    setIsDownloadingZip(true);
+    try {
+      await downloadProjectZip(nodes, edges, agentName);
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -594,6 +604,8 @@ export function AgentEditor() {
         canUndo={canUndo}
         canRedo={canRedo}
         onExportCode={() => setShowCodeExport(true)}
+        onDownloadZip={handleDownloadZip}
+        isDownloadingZip={isDownloadingZip}
         onAgentNameChange={setAgentName}
       />
 

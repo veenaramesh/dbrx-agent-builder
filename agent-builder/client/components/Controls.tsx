@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
   Bot, Cpu, Search, Wrench, X, Copy, Check,
-  ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon,
+  ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, Download,
 } from 'lucide-react';
 import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS } from '../constants';
@@ -30,6 +30,8 @@ interface HeaderProps {
   canUndo: boolean;
   canRedo: boolean;
   onExportCode: () => void;
+  onDownloadZip: () => void;
+  isDownloadingZip: boolean;
   onAgentNameChange: (name: string) => void;
 }
 
@@ -42,6 +44,8 @@ export const Header: React.FC<HeaderProps> = ({
   canUndo,
   canRedo,
   onExportCode,
+  onDownloadZip,
+  isDownloadingZip,
   onAgentNameChange,
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
@@ -143,11 +147,22 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Export Code */}
       <button
         onClick={onExportCode}
-        className="flex items-center gap-2 px-3 h-8 bg-[#FF3621] hover:bg-[#e02d1a] text-white text-xs font-semibold rounded-md transition-colors"
+        className="flex items-center gap-2 px-3 h-8 bg-[#243f49] hover:bg-[#2e5060] text-white text-xs font-semibold rounded-md transition-colors border border-[#34606f]"
         title="Export Agent Code"
       >
         <Code2 size={14} />
         Export Code
+      </button>
+
+      {/* Download ZIP */}
+      <button
+        onClick={onDownloadZip}
+        disabled={isDownloadingZip}
+        className="flex items-center gap-2 px-3 h-8 bg-[#FF3621] hover:bg-[#e02d1a] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors"
+        title="Download full DAB project as ZIP"
+      >
+        <Download size={14} />
+        {isDownloadingZip ? 'Generating…' : 'Download ZIP'}
       </button>
     </div>
   );
