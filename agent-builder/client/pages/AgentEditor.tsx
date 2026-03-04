@@ -580,7 +580,7 @@ export function AgentEditor() {
   // ── Code export ───────────────────────────────────────────────────────────
 
   const generatedCode = generateAgentCode(nodes, edges, agentName);
-  const generatedConfig = JSON.stringify(buildBundleConfig(nodes, agentName), null, 2);
+  const generatedConfig = JSON.stringify(buildBundleConfig(nodes, edges, agentName), null, 2);
 
   const handleDownloadZip = async () => {
     setIsDownloadingZip(true);
