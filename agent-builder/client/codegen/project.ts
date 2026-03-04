@@ -25,6 +25,7 @@ interface ToolDef {
   catalog: string;
   schema: string;
   description: string;
+  deploy: boolean;     // true = generate stub + deploy; false = call existing
 }
 
 interface RetrieverDef {
@@ -98,7 +99,7 @@ export interface BundleConfig {
 
 const makeToolDef = (n: AgentNodeData): ToolDef => {
   const cfg = n.config as UCFunctionConfig;
-  return { name: cfg.functionName, catalog: cfg.catalog, schema: cfg.schema, description: cfg.description };
+  return { name: cfg.functionName, catalog: cfg.catalog, schema: cfg.schema, description: cfg.description, deploy: cfg.deploy ?? true };
 };
 
 const makeRetrieverDef = (n: AgentNodeData): RetrieverDef => {

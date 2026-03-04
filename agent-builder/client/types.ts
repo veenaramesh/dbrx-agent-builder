@@ -22,6 +22,7 @@ export interface UCFunctionConfig {
   schema: string;
   functionName: string;
   description: string;
+  deploy: boolean;  // true = generate stub + deploy via tools bundle; false = call existing UC function
 }
 
 export interface AgentConfig {

@@ -73,6 +73,7 @@ export const DEFAULT_UC_FUNCTION_CONFIG: UCFunctionConfig = {
   schema: 'default',
   functionName: 'my_function',
   description: '',
+  deploy: true,
 };
 
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
@@ -92,14 +93,14 @@ export const INITIAL_NODES: AgentNodeData[] = [
     id: 'ucf-1',
     type: 'uc_function',
     label: 'search_knowledge_base',
-    config: { catalog: 'main', schema: 'tools', functionName: 'search_knowledge_base', description: 'Search the knowledge base for relevant documents' },
+    config: { catalog: 'main', schema: 'tools', functionName: 'search_knowledge_base', description: 'Search the knowledge base for relevant documents', deploy: true },
     x: 80, y: 120, width: 190, height: 90,
   },
   {
     id: 'ucf-2',
     type: 'uc_function',
     label: 'get_user_profile',
-    config: { catalog: 'main', schema: 'tools', functionName: 'get_user_profile', description: 'Fetch user profile data' },
+    config: { catalog: 'main', schema: 'tools', functionName: 'get_user_profile', description: 'Fetch user profile data', deploy: true },
     x: 80, y: 260, width: 190, height: 90,
   },
   {

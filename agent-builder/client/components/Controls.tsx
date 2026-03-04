@@ -523,6 +523,27 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             <div className="text-[9px] font-mono text-slate-500 bg-slate-50 border border-slate-200 rounded px-2 py-1.5">
               {cfg.catalog || 'catalog'}.{cfg.schema || 'schema'}.{cfg.functionName || 'function_name'}
             </div>
+            {/* Deploy toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none mt-1">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={cfg.deploy ?? true}
+                  onChange={(e) => updateConfig({ deploy: e.target.checked })}
+                />
+                <div className={`w-8 h-4 rounded-full transition-colors ${(cfg.deploy ?? true) ? 'bg-[#F7A600]' : 'bg-slate-300'}`} />
+                <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${(cfg.deploy ?? true) ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+              <span className="text-[11px] font-medium text-slate-700">
+                {(cfg.deploy ?? true) ? 'Deploy this function' : 'Call existing function'}
+              </span>
+            </label>
+            <p className="text-[10px] text-slate-400 -mt-0.5">
+              {(cfg.deploy ?? true)
+                ? 'Generates a stub .py file and deploys it to UC via the tools bundle.'
+                : 'References an already-deployed UC function by its full path.'}
+            </p>
             <Field label="Description (optional)">
               <textarea
                 className={textareaCls}
