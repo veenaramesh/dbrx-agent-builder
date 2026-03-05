@@ -376,17 +376,10 @@ export function AgentEditor() {
     }
   };
 
-  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
-    e.preventDefault();
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.2, Math.min(4, viewport.zoom * factor));
-    const newX = mouseX - (mouseX - viewport.x) * (newZoom / viewport.zoom);
-    const newY = mouseY - (mouseY - viewport.y) * (newZoom / viewport.zoom);
-    setViewport({ x: newX, y: newY, zoom: newZoom });
-  };
+  const ZOOM_STEP = 0.15;
+  const zoomIn  = () => setViewport(v => ({ ...v, zoom: Math.min(4, +(v.zoom + ZOOM_STEP).toFixed(2)) }));
+  const zoomOut = () => setViewport(v => ({ ...v, zoom: Math.max(0.2, +(v.zoom - ZOOM_STEP).toFixed(2)) }));
+  const zoomReset = () => setViewport(v => ({ ...v, zoom: 1 }));
 
   // ── Node events ────────────────────────────────────────────────────────────
 
@@ -633,7 +626,6 @@ export function AgentEditor() {
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleCanvasMouseUp}
-            onWheel={handleWheel}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
           >
@@ -714,9 +706,25 @@ export function AgentEditor() {
             </g>
           </svg>
 
-          {/* Zoom indicator */}
-          <div className="absolute bottom-3 right-3 text-[10px] font-mono text-slate-400 bg-white/80 border border-slate-200 rounded px-2 py-1 select-none">
-            {Math.round(viewport.zoom * 100)}%
+          {/* Zoom controls */}
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white border border-slate-200 rounded-lg shadow-sm px-1 py-1 select-none">
+            <button
+              onClick={zoomOut}
+              disabled={viewport.zoom <= 0.2}
+              className="w-7 h-7 flex items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-30 text-base font-medium transition-colors"
+              title="Zoom out"
+            >−</button>
+            <button
+              onClick={zoomReset}
+              className="px-2 h-7 text-[11px] font-mono text-slate-500 hover:bg-slate-100 rounded transition-colors min-w-[42px]"
+              title="Reset zoom"
+            >{Math.round(viewport.zoom * 100)}%</button>
+            <button
+              onClick={zoomIn}
+              disabled={viewport.zoom >= 4}
+              className="w-7 h-7 flex items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-30 text-base font-medium transition-colors"
+              title="Zoom in"
+            >+</button>
           </div>
 
           {/* Empty state hint */}
