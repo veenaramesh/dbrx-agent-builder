@@ -1,4 +1,4 @@
-import { AgentNodeData, EdgeData, LLMConfig, UCFunctionConfig, VectorSearchConfig } from '../types';
+import { AgentNodeData, EdgeData, LakebaseConfig, LLMConfig, UCFunctionConfig, VectorSearchConfig } from '../types';
 
 // ── Config JSON ───────────────────────────────────────────────────────────────
 // Maps canvas state → key-value pairs for:
@@ -98,6 +98,8 @@ export interface BundleConfig {
   worker_llms: WorkerLLMDef[];
   pipeline_stages: PipelineLLMDef[];   // ordered chain for sequential pattern
   parallel_branches: ParallelBranchDef[]; // branches for parallel fan-out pattern
+  has_lakebase: boolean;
+  lakebase_instance_name: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -127,8 +129,9 @@ export const buildBundleConfig = (
   agentName: string,
   host?: string,
 ): BundleConfig => {
-  // Group nodes are purely cosmetic — exclude from codegen
-  const codeNodes = nodes.filter(n => n.type !== 'group');
+  // Group and lakebase nodes are excluded from topology analysis
+  const lakebaseNode = nodes.find(n => n.type === 'lakebase');
+  const codeNodes = nodes.filter(n => n.type !== 'group' && n.type !== 'lakebase');
   const agentNode = codeNodes.find(n => n.type === 'agent');
   const llmNodes  = codeNodes.filter(n => n.type === 'llm');
   const vsNodes   = codeNodes.filter(n => n.type === 'vector_search');
@@ -283,6 +286,8 @@ export const buildBundleConfig = (
     worker_llms,
     pipeline_stages,
     parallel_branches,
+    has_lakebase: lakebaseNode != null,
+    lakebase_instance_name: lakebaseNode ? (lakebaseNode.config as LakebaseConfig).instanceName : '',
   };
 };
 

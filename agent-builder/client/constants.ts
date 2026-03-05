@@ -1,5 +1,5 @@
 
-import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig } from './types';
+import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig, LakebaseConfig } from './types';
 
 export const GRID_SIZE = 20;
 
@@ -39,6 +39,12 @@ export const NODE_COLORS: Record<AgentNodeType, {
     borderColor: '#7c3aed',
     label: 'Group',
   },
+  lakebase: {
+    headerBg: '#ccfbf1',
+    headerText: '#0f766e',
+    borderColor: '#0d9488',
+    label: 'Lakebase',
+  },
 };
 
 export const DATABRICKS_MODELS = [
@@ -57,6 +63,7 @@ export const DEFAULT_NODE_SIZE: Record<AgentNodeType, { width: number; height: n
   vector_search: { width: 190, height: 110 },
   uc_function: { width: 180, height: 90 },
   group: { width: 320, height: 220 },
+  lakebase: { width: 180, height: 90 },
 };
 
 export const DEFAULT_LLM_CONFIG: LLMConfig = {
@@ -92,12 +99,17 @@ export const DEFAULT_GROUP_CONFIG: GroupConfig = {
   description: '',
 };
 
+export const DEFAULT_LAKEBASE_CONFIG: LakebaseConfig = {
+  instanceName: '',
+};
+
 export const DEFAULT_CONFIGS = {
   agent: DEFAULT_AGENT_CONFIG,
   llm: DEFAULT_LLM_CONFIG,
   vector_search: DEFAULT_VECTOR_SEARCH_CONFIG,
   uc_function: DEFAULT_UC_FUNCTION_CONFIG,
   group: DEFAULT_GROUP_CONFIG,
+  lakebase: DEFAULT_LAKEBASE_CONFIG,
 };
 
 export const INITIAL_NODES: AgentNodeData[] = [

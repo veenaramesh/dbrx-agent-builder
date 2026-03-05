@@ -1,7 +1,7 @@
 import React from 'react';
 import { AgentNodeData, AgentNodeType, PortPosition } from '../types';
 import { NODE_COLORS } from '../constants';
-import { Bot, Cpu, Search, Wrench } from 'lucide-react';
+import { Bot, Cpu, Search, Wrench, Database } from 'lucide-react';
 
 interface NodeViewProps {
   node: AgentNodeData;
@@ -24,6 +24,7 @@ const NodeIcon = ({ type, color }: { type: AgentNodeType; color: string }) => {
     case 'vector_search': return <Search {...props} />;
     case 'uc_function': return <Wrench {...props} />;
     case 'group': return null;
+    case 'lakebase': return <Database {...props} />;
   }
 };
 
@@ -46,6 +47,10 @@ const getNodeSubtitle = (node: AgentNodeData): string => {
       return cfg.description ? cfg.description.slice(0, 40) : 'supervisor';
     }
     case 'group': return '';
+    case 'lakebase': {
+      const cfg = node.config as { instanceName: string };
+      return cfg.instanceName || 'set instance name';
+    }
   }
 };
 
@@ -67,6 +72,8 @@ const getNodeBadge = (node: AgentNodeData): string | null => {
       return null;
     case 'group':
       return null;
+    case 'lakebase':
+      return 'checkpoint';
   }
 };
 

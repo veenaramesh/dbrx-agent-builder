@@ -1,5 +1,5 @@
 
-export type AgentNodeType = 'agent' | 'llm' | 'vector_search' | 'uc_function' | 'group';
+export type AgentNodeType = 'agent' | 'llm' | 'vector_search' | 'uc_function' | 'group' | 'lakebase';
 
 export interface LLMConfig {
   endpointName: string;
@@ -34,7 +34,11 @@ export interface GroupConfig {
   description: string;
 }
 
-export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | AgentConfig | GroupConfig;
+export interface LakebaseConfig {
+  instanceName: string;
+}
+
+export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | AgentConfig | GroupConfig | LakebaseConfig;
 
 export interface AgentNodeData {
   id: string;

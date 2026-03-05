@@ -3,9 +3,9 @@ import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
   Bot, Cpu, Search, Wrench, X, Copy, Check,
   ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, Download,
-  Unplug, Loader2, CircleDot, Square,
+  Unplug, Loader2, CircleDot, Square, Database,
 } from 'lucide-react';
-import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig } from '../types';
+import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig, LakebaseConfig } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS } from '../constants';
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
@@ -360,6 +360,12 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
       { type: 'group', label: 'Group', description: 'Visual group box to annotate subagents' },
     ],
   },
+  {
+    title: 'Memory',
+    items: [
+      { type: 'lakebase', label: 'Lakebase', description: 'Postgres checkpoint store for conversation memory' },
+    ],
+  },
 ];
 
 const sidebarIcons: Record<AgentNodeType, React.ReactNode> = {
@@ -368,6 +374,7 @@ const sidebarIcons: Record<AgentNodeType, React.ReactNode> = {
   vector_search: <Search size={14} />,
   uc_function: <Wrench size={14} />,
   group: <Square size={14} />,
+  lakebase: <Database size={14} />,
 };
 
 interface SidebarProps {
@@ -479,13 +486,13 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
   const colors = NODE_COLORS[selectedNode.type];
 
-  const updateConfig = (patch: Partial<LLMConfig & VectorSearchConfig & UCFunctionConfig & AgentConfig>) => {
+  const updateConfig = (patch: Partial<LLMConfig & VectorSearchConfig & UCFunctionConfig & AgentConfig & GroupConfig & LakebaseConfig>) => {
     onUpdateNode({ ...selectedNode, config: { ...selectedNode.config, ...patch } });
   };
 
   const updateLabel = (label: string) => onUpdateNode({ ...selectedNode, label });
 
-  const cfg = selectedNode.config as LLMConfig & VectorSearchConfig & UCFunctionConfig & AgentConfig & GroupConfig;
+  const cfg = selectedNode.config as LLMConfig & VectorSearchConfig & UCFunctionConfig & AgentConfig & GroupConfig & LakebaseConfig;
 
   return (
     <div className="w-[280px] flex-shrink-0 bg-white border-l border-[#DDE3E8] flex flex-col overflow-hidden">
@@ -732,6 +739,25 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             Groups are visual annotations only — they do not affect code generation.
             Double-click the canvas group to rename it. Drag corners to resize.
           </p>
+        )}
+
+        {/* ── Lakebase ── */}
+        {selectedNode.type === 'lakebase' && (
+          <>
+            <Field label="Instance Name">
+              <input
+                className={inputCls}
+                placeholder="my-lakebase-instance"
+                value={cfg.instanceName ?? ''}
+                onChange={(e) => updateConfig({ instanceName: e.target.value })}
+              />
+            </Field>
+            <p className="text-[10px] text-slate-400 leading-relaxed -mt-2">
+              Databricks Postgres instance for conversation checkpointing. Thread ID priority:{' '}
+              <code className="text-slate-500">custom_inputs.conversation_id</code> → new{' '}
+              <code className="text-slate-500">uuid7()</code> per request.
+            </p>
+          </>
         )}
       </div>
 
