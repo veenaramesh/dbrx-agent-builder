@@ -3,6 +3,7 @@ import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
   Bot, Cpu, Search, Wrench, X, Copy, Check,
   ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, Download,
+  Unplug, Loader2, CircleDot,
 } from 'lucide-react';
 import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS } from '../constants';
@@ -19,6 +20,115 @@ const AgentBuilderLogo = ({ size = 22 }: { size?: number }) => (
   </svg>
 );
 
+// ── Databricks Auth ───────────────────────────────────────────────────────────
+
+export interface DatabricksAuth {
+  host: string;
+  token: string;   // memory-only, never persisted
+  models: string[];
+}
+
+interface ConnectModalProps {
+  onConnect: (auth: DatabricksAuth) => void;
+  onClose: () => void;
+}
+
+const DatabricksConnectModal: React.FC<ConnectModalProps> = ({ onConnect, onClose }) => {
+  const [host, setHost]     = useState('');
+  const [token, setToken]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]   = useState('');
+
+  const connect = async () => {
+    setError('');
+    const cleanHost = host.trim().replace(/\/$/, '');
+    if (!cleanHost || !token.trim()) { setError('Both fields are required.'); return; }
+    setLoading(true);
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_API_URL}/models`, {
+        headers: {
+          'Authorization': `Bearer ${token.trim()}`,
+          'X-Databricks-Host': cleanHost,
+        },
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.detail ?? `HTTP ${resp.status}`);
+      }
+      const { models } = await resp.json();
+      onConnect({ host: cleanHost, token: token.trim(), models });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Connection failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-[420px] p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-bold text-slate-800">Connect to Databricks</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+              Workspace URL
+            </label>
+            <input
+              type="url"
+              className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF3621]/30 focus:border-[#FF3621]"
+              placeholder="https://adb-xxxx.azuredatabricks.net"
+              value={host}
+              onChange={e => setHost(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && connect()}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+              Personal Access Token
+            </label>
+            <input
+              type="password"
+              className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF3621]/30 focus:border-[#FF3621] font-mono"
+              placeholder="dapi••••••••••••••••"
+              value={token}
+              onChange={e => setToken(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && connect()}
+            />
+            <a
+              href="https://docs.databricks.com/aws/en/dev-tools/auth/pat"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] text-[#FF3621] hover:underline mt-1 inline-block"
+            >
+              Generate a token →
+            </a>
+          </div>
+
+          {error && (
+            <p className="text-[11px] text-red-500 bg-red-50 rounded-md px-3 py-2">{error}</p>
+          )}
+
+          <p className="text-[10px] text-slate-400 bg-slate-50 rounded-md px-3 py-2 leading-relaxed">
+            Your token is stored <strong>in memory only</strong> — never saved to disk or sent anywhere except your Databricks workspace.
+          </p>
+
+          <button
+            onClick={connect}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#FF3621] hover:bg-[#e02d1a] disabled:opacity-50 text-white text-xs font-semibold rounded-md transition-colors"
+          >
+            {loading ? <><Loader2 size={13} className="animate-spin" /> Connecting…</> : 'Connect'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Header ────────────────────────────────────────────────────────────────────
 
 interface HeaderProps {
@@ -33,6 +143,9 @@ interface HeaderProps {
   onDownloadZip: () => void;
   isDownloadingZip: boolean;
   onAgentNameChange: (name: string) => void;
+  auth: DatabricksAuth | null;
+  onConnect: (auth: DatabricksAuth) => void;
+  onDisconnect: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -47,8 +160,12 @@ export const Header: React.FC<HeaderProps> = ({
   onDownloadZip,
   isDownloadingZip,
   onAgentNameChange,
+  auth,
+  onConnect,
+  onDisconnect,
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
+  const [showConnectModal, setShowConnectModal] = useState(false);
   const [editedName, setEditedName] = useState(agentName);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -144,6 +261,36 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Spacer */}
       <div className="flex-1" />
 
+      {/* Databricks connection */}
+      {auth ? (
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2.5 h-8 bg-[#243f49] border border-[#34606f] rounded-md">
+            <CircleDot size={10} className="text-green-400" />
+            <span className="text-[11px] text-white/70 font-mono max-w-[160px] truncate" title={auth.host}>
+              {auth.host.replace('https://', '')}
+            </span>
+          </div>
+          <button
+            onClick={onDisconnect}
+            className="w-8 h-8 flex items-center justify-center rounded-md text-white/50 hover:bg-[#243f49] hover:text-white transition-all"
+            title="Disconnect"
+          >
+            <Unplug size={14} />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowConnectModal(true)}
+          className="flex items-center gap-2 px-3 h-8 bg-[#243f49] hover:bg-[#2e5060] text-white/70 hover:text-white text-xs font-medium rounded-md transition-colors border border-[#34606f]"
+          title="Connect to Databricks to fetch live model list"
+        >
+          <CircleDot size={11} className="text-white/30" />
+          Connect Databricks
+        </button>
+      )}
+
+      <div className="w-px h-[22px] bg-[#34606f]" />
+
       {/* Export Code */}
       <button
         onClick={onExportCode}
@@ -164,6 +311,13 @@ export const Header: React.FC<HeaderProps> = ({
         <Download size={14} />
         {isDownloadingZip ? 'Generating…' : 'Download ZIP'}
       </button>
+
+      {showConnectModal && (
+        <DatabricksConnectModal
+          onConnect={(a) => { onConnect(a); setShowConnectModal(false); }}
+          onClose={() => setShowConnectModal(false)}
+        />
+      )}
     </div>
   );
 };
@@ -287,6 +441,7 @@ interface RightPanelProps {
   onDeleteNode: (id: string) => void;
   onDuplicateNode: (node: AgentNodeData) => void;
   onClose: () => void;
+  models: string[];
 }
 
 const Field = ({
@@ -311,6 +466,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   onDeleteNode,
   onDuplicateNode,
   onClose,
+  models,
 }) => {
   if (!selectedNode) return null;
 
@@ -387,16 +543,16 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             <Field label="Endpoint / Model">
               <select
                 className={inputCls}
-                value={cfg.model ?? DATABRICKS_MODELS[0]}
+                value={cfg.model ?? models[0]}
                 onChange={(e) => updateConfig({ model: e.target.value, endpointName: e.target.value })}
               >
-                {DATABRICKS_MODELS.map(m => (
+                {models.map(m => (
                   <option key={m} value={m}>{m.replace('databricks-', '')}</option>
                 ))}
                 <option value="__custom__">Custom endpoint…</option>
               </select>
             </Field>
-            {(cfg.model === '__custom__' || !DATABRICKS_MODELS.includes(cfg.endpointName ?? '')) && (
+            {(cfg.model === '__custom__' || !models.includes(cfg.endpointName ?? '')) && (
               <Field label="Custom Endpoint Name">
                 <input
                   className={inputCls}

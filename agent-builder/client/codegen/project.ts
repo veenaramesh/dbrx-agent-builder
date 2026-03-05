@@ -119,7 +119,8 @@ const makeRetrieverDef = (n: AgentNodeData): RetrieverDef => {
 export const buildBundleConfig = (
   nodes: AgentNodeData[],
   edges: EdgeData[],
-  agentName: string
+  agentName: string,
+  host?: string,
 ): BundleConfig => {
   const agentNode = nodes.find(n => n.type === 'agent');
   const llmNodes  = nodes.filter(n => n.type === 'llm');
@@ -249,7 +250,7 @@ export const buildBundleConfig = (
   return {
     project_name:           toProjectName(agentName),
     uc_catalog:             ucfCfg?.catalog ?? 'main',
-    databricks_host:        'https://',
+    databricks_host:        host ?? 'https://',
     include_retriever:      vsNodes.length  > 0 ? 'yes' : 'no',
     include_tools:          ucfNodes.length > 0 ? 'yes' : 'no',
     include_agent:          'yes',
@@ -274,9 +275,10 @@ export const buildBundleConfig = (
 export const downloadProjectZip = async (
   nodes: AgentNodeData[],
   edges: EdgeData[],
-  agentName: string
+  agentName: string,
+  host?: string,
 ): Promise<void> => {
-  const config = buildBundleConfig(nodes, edges, agentName);
+  const config = buildBundleConfig(nodes, edges, agentName, host);
 
   const response = await fetch(
     `${import.meta.env.VITE_API_URL}/generate`,

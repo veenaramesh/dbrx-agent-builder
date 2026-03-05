@@ -31,7 +31,9 @@ import {
   RightPanel,
   ContextMenu,
   CodeExportModal,
+  DatabricksAuth,
 } from '../components/Controls';
+import { DATABRICKS_MODELS } from '../constants';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,6 +104,7 @@ export function AgentEditor() {
   const [contextMenu, setContextMenu] = useState<CtxMenu | null>(null);
   const [showCodeExport, setShowCodeExport] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [auth, setAuth] = useState<DatabricksAuth | null>(null);
 
   // Undo / redo
   const historyRef = useRef<{ nodes: AgentNodeData[]; edges: EdgeData[] }[]>([]);
@@ -585,12 +588,12 @@ export function AgentEditor() {
   // ── Code export ───────────────────────────────────────────────────────────
 
   const generatedCode = generateAgentCode(nodes, edges, agentName);
-  const generatedConfig = JSON.stringify(buildBundleConfig(nodes, edges, agentName), null, 2);
+  const generatedConfig = JSON.stringify(buildBundleConfig(nodes, edges, agentName, auth?.host), null, 2);
 
   const handleDownloadZip = async () => {
     setIsDownloadingZip(true);
     try {
-      await downloadProjectZip(nodes, edges, agentName);
+      await downloadProjectZip(nodes, edges, agentName, auth?.host);
     } finally {
       setIsDownloadingZip(false);
     }
@@ -612,6 +615,9 @@ export function AgentEditor() {
         onDownloadZip={handleDownloadZip}
         isDownloadingZip={isDownloadingZip}
         onAgentNameChange={setAgentName}
+        auth={auth}
+        onConnect={setAuth}
+        onDisconnect={() => setAuth(null)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -731,6 +737,7 @@ export function AgentEditor() {
           onDeleteNode={deleteNode}
           onDuplicateNode={duplicateNode}
           onClose={() => setSelectedNodeIds(new Set())}
+          models={auth?.models ?? DATABRICKS_MODELS}
         />
       </div>
 
