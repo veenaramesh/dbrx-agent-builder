@@ -174,7 +174,12 @@ export function AgentEditor() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
 
-      if ((e.key === 'Delete' || e.key === 'Backspace') && editingNodeId === null) {
+      const active = document.activeElement;
+      const isTyping = active instanceof HTMLInputElement
+        || active instanceof HTMLTextAreaElement
+        || (active as HTMLElement)?.isContentEditable;
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && editingNodeId === null && !isTyping) {
         if (selectedNodeIds.size > 0) {
           const ids = new Set(selectedNodeIds);
           setNodes(prev => prev.filter(n => !ids.has(n.id)));
