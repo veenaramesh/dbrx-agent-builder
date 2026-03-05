@@ -23,6 +23,7 @@ const NodeIcon = ({ type, color }: { type: AgentNodeType; color: string }) => {
     case 'llm': return <Cpu {...props} />;
     case 'vector_search': return <Search {...props} />;
     case 'uc_function': return <Wrench {...props} />;
+    case 'group': return null;
   }
 };
 
@@ -44,6 +45,7 @@ const getNodeSubtitle = (node: AgentNodeData): string => {
       const cfg = node.config as { maxIterations: number };
       return `max ${cfg.maxIterations} iterations`;
     }
+    case 'group': return '';
   }
 };
 
@@ -62,6 +64,8 @@ const getNodeBadge = (node: AgentNodeData): string | null => {
       return cfg.functionName;
     }
     case 'agent':
+      return null;
+    case 'group':
       return null;
   }
 };

@@ -1,5 +1,5 @@
 
-export type AgentNodeType = 'agent' | 'llm' | 'vector_search' | 'uc_function';
+export type AgentNodeType = 'agent' | 'llm' | 'vector_search' | 'uc_function' | 'group';
 
 export interface LLMConfig {
   endpointName: string;
@@ -30,7 +30,11 @@ export interface AgentConfig {
   maxIterations: number;
 }
 
-export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | AgentConfig;
+export interface GroupConfig {
+  description: string;
+}
+
+export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | AgentConfig | GroupConfig;
 
 export interface AgentNodeData {
   id: string;

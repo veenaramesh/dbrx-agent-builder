@@ -1,5 +1,5 @@
 
-import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig } from './types';
+import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig } from './types';
 
 export const GRID_SIZE = 20;
 
@@ -33,6 +33,12 @@ export const NODE_COLORS: Record<AgentNodeType, {
     borderColor: '#F7A600',
     label: 'UC Function',
   },
+  group: {
+    headerBg: '#ede9fe',
+    headerText: '#5b21b6',
+    borderColor: '#7c3aed',
+    label: 'Group',
+  },
 };
 
 export const DATABRICKS_MODELS = [
@@ -50,6 +56,7 @@ export const DEFAULT_NODE_SIZE: Record<AgentNodeType, { width: number; height: n
   llm: { width: 180, height: 110 },
   vector_search: { width: 190, height: 110 },
   uc_function: { width: 180, height: 90 },
+  group: { width: 320, height: 220 },
 };
 
 export const DEFAULT_LLM_CONFIG: LLMConfig = {
@@ -81,11 +88,16 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   maxIterations: 10,
 };
 
+export const DEFAULT_GROUP_CONFIG: GroupConfig = {
+  description: '',
+};
+
 export const DEFAULT_CONFIGS = {
   agent: DEFAULT_AGENT_CONFIG,
   llm: DEFAULT_LLM_CONFIG,
   vector_search: DEFAULT_VECTOR_SEARCH_CONFIG,
   uc_function: DEFAULT_UC_FUNCTION_CONFIG,
+  group: DEFAULT_GROUP_CONFIG,
 };
 
 export const INITIAL_NODES: AgentNodeData[] = [
@@ -111,24 +123,16 @@ export const INITIAL_NODES: AgentNodeData[] = [
     x: 80, y: 400, width: 190, height: 110,
   },
   {
-    id: 'agent-1',
-    type: 'agent',
-    label: 'Customer Support Agent',
-    config: { description: 'Answers customer questions using product docs and user data', maxIterations: 10 },
-    x: 380, y: 240, width: 190, height: 100,
-  },
-  {
     id: 'llm-1',
     type: 'llm',
     label: 'Llama 3.3 70B',
     config: { endpointName: 'databricks-meta-llama-3-3-70b-instruct', model: 'databricks-meta-llama-3-3-70b-instruct', maxTokens: 1024, temperature: 0.1, systemPrompt: 'You are a helpful customer support agent. Be concise and accurate.' },
-    x: 680, y: 240, width: 190, height: 110,
+    x: 460, y: 260, width: 190, height: 110,
   },
 ];
 
 export const INITIAL_EDGES: EdgeData[] = [
-  { id: 'e1', source: 'ucf-1', target: 'agent-1', sourcePort: 'right', targetPort: 'left' },
-  { id: 'e2', source: 'ucf-2', target: 'agent-1', sourcePort: 'right', targetPort: 'left' },
-  { id: 'e3', source: 'vs-1', target: 'agent-1', sourcePort: 'right', targetPort: 'left' },
-  { id: 'e4', source: 'agent-1', target: 'llm-1', sourcePort: 'right', targetPort: 'left' },
+  { id: 'e1', source: 'ucf-1', target: 'llm-1', sourcePort: 'right', targetPort: 'left' },
+  { id: 'e2', source: 'ucf-2', target: 'llm-1', sourcePort: 'right', targetPort: 'left' },
+  { id: 'e3', source: 'vs-1', target: 'llm-1', sourcePort: 'right', targetPort: 'left' },
 ];

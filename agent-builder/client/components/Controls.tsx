@@ -3,9 +3,9 @@ import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
   Bot, Cpu, Search, Wrench, X, Copy, Check,
   ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, Download,
-  Unplug, Loader2, CircleDot,
+  Unplug, Loader2, CircleDot, Square,
 } from 'lucide-react';
-import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig } from '../types';
+import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS } from '../constants';
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
@@ -331,15 +331,9 @@ interface SidebarSection {
 
 const SIDEBAR_SECTIONS: SidebarSection[] = [
   {
-    title: 'Orchestration',
-    items: [
-      { type: 'agent', label: 'Agent', description: 'AI agent that orchestrates tools and models' },
-    ],
-  },
-  {
     title: 'Models',
     items: [
-      { type: 'llm', label: 'LLM', description: 'Databricks Foundation Model endpoint' },
+      { type: 'llm', label: 'LLM', description: 'Tool-calling LLM — connect tools directly' },
     ],
   },
   {
@@ -354,6 +348,18 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
       { type: 'uc_function', label: 'UC Function', description: 'Unity Catalog function as a tool' },
     ],
   },
+  {
+    title: 'Multi-Agent',
+    items: [
+      { type: 'agent', label: 'Agent', description: 'Supervisor node for multi-agent patterns' },
+    ],
+  },
+  {
+    title: 'Annotations',
+    items: [
+      { type: 'group', label: 'Group', description: 'Visual group box to annotate subagents' },
+    ],
+  },
 ];
 
 const sidebarIcons: Record<AgentNodeType, React.ReactNode> = {
@@ -361,6 +367,7 @@ const sidebarIcons: Record<AgentNodeType, React.ReactNode> = {
   llm: <Cpu size={14} />,
   vector_search: <Search size={14} />,
   uc_function: <Wrench size={14} />,
+  group: <Square size={14} />,
 };
 
 interface SidebarProps {
@@ -478,7 +485,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
   const updateLabel = (label: string) => onUpdateNode({ ...selectedNode, label });
 
-  const cfg = selectedNode.config as LLMConfig & VectorSearchConfig & UCFunctionConfig & AgentConfig;
+  const cfg = selectedNode.config as LLMConfig & VectorSearchConfig & UCFunctionConfig & AgentConfig & GroupConfig;
 
   return (
     <div className="w-[280px] flex-shrink-0 bg-white border-l border-[#DDE3E8] flex flex-col overflow-hidden">
@@ -710,6 +717,14 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               />
             </Field>
           </>
+        )}
+
+        {/* ── Group ── */}
+        {selectedNode.type === 'group' && (
+          <p className="text-[10px] text-slate-400 leading-relaxed">
+            Groups are visual annotations only — they do not affect code generation.
+            Double-click the canvas group to rename it. Drag corners to resize.
+          </p>
         )}
       </div>
 

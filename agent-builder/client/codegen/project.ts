@@ -122,10 +122,12 @@ export const buildBundleConfig = (
   agentName: string,
   host?: string,
 ): BundleConfig => {
-  const agentNode = nodes.find(n => n.type === 'agent');
-  const llmNodes  = nodes.filter(n => n.type === 'llm');
-  const vsNodes   = nodes.filter(n => n.type === 'vector_search');
-  const ucfNodes  = nodes.filter(n => n.type === 'uc_function');
+  // Group nodes are purely cosmetic — exclude from codegen
+  const codeNodes = nodes.filter(n => n.type !== 'group');
+  const agentNode = codeNodes.find(n => n.type === 'agent');
+  const llmNodes  = codeNodes.filter(n => n.type === 'llm');
+  const vsNodes   = codeNodes.filter(n => n.type === 'vector_search');
+  const ucfNodes  = codeNodes.filter(n => n.type === 'uc_function');
 
   const firstLLMCfg = llmNodes[0]?.config as LLMConfig | undefined;
   const vsCfg       = vsNodes[0]?.config as VectorSearchConfig | undefined;
@@ -135,10 +137,15 @@ export const buildBundleConfig = (
   const tools      = ucfNodes.map(makeToolDef);
   const retrievers = vsNodes.map(makeRetrieverDef);
 
-  // ── Connectivity: which nodes have a direct edge → agent node ────────────
+  // ── Connectivity: which nodes have a direct edge → agent (or primary LLM) ─
+  // When there's no agent node, tools connect directly to the primary LLM
+  // (single tool-calling agent pattern). Use the first LLM as the target.
+  const primaryLLMForTools = agentNode ? undefined : llmNodes[0];
   const connectedToAgent = agentNode
     ? new Set(edges.filter(e => e.target === agentNode.id).map(e => e.source))
-    : new Set<string>();
+    : primaryLLMForTools
+      ? new Set(edges.filter(e => e.target === primaryLLMForTools.id).map(e => e.source))
+      : new Set<string>();
 
   const agent_tools      = ucfNodes.filter(n => connectedToAgent.has(n.id)).map(makeToolDef);
   const agent_retrievers = vsNodes.filter(n => connectedToAgent.has(n.id)).map(makeRetrieverDef);

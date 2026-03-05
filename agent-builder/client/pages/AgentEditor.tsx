@@ -24,6 +24,7 @@ import {
 } from '../utils';
 import { buildBundleConfig, downloadProjectZip } from '../codegen/project';
 import { NodeView } from '../components/NodeView';
+import { GroupView, ResizeCorner } from '../components/GroupView';
 import { EdgeView } from '../components/EdgeView';
 import {
   Header,
@@ -63,6 +64,17 @@ interface CtxMenu {
   nodeId: string | null;
 }
 
+interface ResizeState {
+  nodeId: string;
+  corner: ResizeCorner;
+  canvasStartX: number;
+  canvasStartY: number;
+  startNodeX: number;
+  startNodeY: number;
+  startWidth: number;
+  startHeight: number;
+}
+
 // ── Canvas background dot grid ────────────────────────────────────────────────
 
 const DotGrid = () => (
@@ -93,6 +105,7 @@ export function AgentEditor() {
 
   const isDraggingRef = useRef(false);
   const dragStateRef = useRef<DragState | null>(null);
+  const resizingRef = useRef<ResizeState | null>(null);
 
   const selectionBoxRef = useRef<SelectionBounds | null>(null);
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -254,6 +267,41 @@ export function AgentEditor() {
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    // Resize group
+    if (resizingRef.current) {
+      const rs = resizingRef.current;
+      const canvas = screenToCanvas(e.clientX, e.clientY);
+      const dx = canvas.x - rs.canvasStartX;
+      const dy = canvas.y - rs.canvasStartY;
+      const MIN_W = 100, MIN_H = 80;
+      let newX = rs.startNodeX, newY = rs.startNodeY;
+      let newW = rs.startWidth, newH = rs.startHeight;
+
+      if (rs.corner === 'se') {
+        newW = Math.max(MIN_W, snapToGrid(rs.startWidth + dx));
+        newH = Math.max(MIN_H, snapToGrid(rs.startHeight + dy));
+      } else if (rs.corner === 'sw') {
+        newW = Math.max(MIN_W, snapToGrid(rs.startWidth - dx));
+        newH = Math.max(MIN_H, snapToGrid(rs.startHeight + dy));
+        newX = rs.startNodeX + rs.startWidth - newW;
+      } else if (rs.corner === 'ne') {
+        newW = Math.max(MIN_W, snapToGrid(rs.startWidth + dx));
+        newH = Math.max(MIN_H, snapToGrid(rs.startHeight - dy));
+        newY = rs.startNodeY + rs.startHeight - newH;
+      } else {
+        // nw
+        newW = Math.max(MIN_W, snapToGrid(rs.startWidth - dx));
+        newH = Math.max(MIN_H, snapToGrid(rs.startHeight - dy));
+        newX = rs.startNodeX + rs.startWidth - newW;
+        newY = rs.startNodeY + rs.startHeight - newH;
+      }
+
+      setNodes(prev => prev.map(n =>
+        n.id === rs.nodeId ? { ...n, x: newX, y: newY, width: newW, height: newH } : n
+      ));
+      return;
+    }
+
     // Pan
     if (isPanningRef.current && panStateRef.current) {
       const { startClientX, startClientY, startVpX, startVpY } = panStateRef.current;
@@ -305,6 +353,13 @@ export function AgentEditor() {
   };
 
   const handleCanvasMouseUp = (e: React.MouseEvent<SVGSVGElement>) => {
+    // Stop resizing
+    if (resizingRef.current) {
+      resizingRef.current = null;
+      saveToHistory();
+      return;
+    }
+
     // Stop panning
     if (isPanningRef.current) {
       isPanningRef.current = false;
@@ -327,6 +382,7 @@ export function AgentEditor() {
 
       for (const node of nodes) {
         if (node.id === connecting.sourceNodeId) continue;
+        if (node.type === 'group') continue;
         for (const port of ['top', 'right', 'bottom', 'left'] as PortPosition[]) {
           const pos = getPortCoordinates(node, port);
           const dist = Math.sqrt((canvas.x - pos.x) ** 2 + (canvas.y - pos.y) ** 2);
@@ -455,6 +511,23 @@ export function AgentEditor() {
     if (editingNodeId) saveToHistory();
     setEditingNodeId(null);
   }, [editingNodeId, saveToHistory]);
+
+  const handleGroupResizeStart = useCallback(
+    (e: React.MouseEvent, node: AgentNodeData, corner: ResizeCorner) => {
+      const canvas = screenToCanvas(e.clientX, e.clientY);
+      resizingRef.current = {
+        nodeId: node.id,
+        corner,
+        canvasStartX: canvas.x,
+        canvasStartY: canvas.y,
+        startNodeX: node.x,
+        startNodeY: node.y,
+        startWidth: node.width,
+        startHeight: node.height,
+      };
+    },
+    [screenToCanvas]
+  );
 
   const handleEdgeSelect = useCallback((e: React.MouseEvent, edge: EdgeData) => {
     e.stopPropagation();
@@ -634,6 +707,23 @@ export function AgentEditor() {
             <rect width="100%" height="100%" fill="url(#dotgrid)" />
 
             <g transform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}>
+              {/* Group nodes — rendered behind everything else */}
+              {nodes.filter(n => n.type === 'group').map(node => (
+                <GroupView
+                  key={node.id}
+                  node={node}
+                  isSelected={selectedNodeIds.has(node.id)}
+                  isEditing={editingNodeId === node.id}
+                  isDimmed={selectedNodeIds.size > 0 && !selectedNodeIds.has(node.id)}
+                  onMouseDown={handleNodeMouseDown}
+                  onContextMenu={handleNodeContextMenu}
+                  onDoubleClick={handleNodeDoubleClick}
+                  onResizeStart={handleGroupResizeStart}
+                  onEditChange={handleEditChange}
+                  onEditComplete={handleEditComplete}
+                />
+              ))}
+
               {/* Edges */}
               {edges.map(edge => {
                 const src = nodes.find(n => n.id === edge.source);
@@ -671,8 +761,8 @@ export function AgentEditor() {
                 />
               )}
 
-              {/* Nodes */}
-              {nodes.map(node => (
+              {/* Regular nodes (groups handled above) */}
+              {nodes.filter(n => n.type !== 'group').map(node => (
                 <NodeView
                   key={node.id}
                   node={node}
