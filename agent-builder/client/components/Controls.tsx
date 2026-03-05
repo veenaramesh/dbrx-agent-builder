@@ -309,7 +309,7 @@ export const Header: React.FC<HeaderProps> = ({
         title="Download full DAB project as ZIP"
       >
         <Download size={14} />
-        {isDownloadingZip ? 'Generating…' : 'Download ZIP'}
+        {isDownloadingZip ? 'Generating…' : 'Download DAB'}
       </button>
 
       {showConnectModal && (
@@ -520,27 +520,21 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           />
         </Field>
 
-        {/* ── Agent ── */}
+        {/* ── Agent (Supervisor) ── */}
         {selectedNode.type === 'agent' && (
           <>
-            <Field label="Description">
+            <Field label="Routing Description">
               <textarea
                 className={textareaCls}
-                rows={3}
+                rows={4}
+                placeholder="e.g. Routes between a search worker and an analytics worker based on the query type."
                 value={cfg.description ?? ''}
                 onChange={(e) => updateConfig({ description: e.target.value })}
               />
             </Field>
-            <Field label="Max Iterations">
-              <input
-                className={inputCls}
-                type="number"
-                min={1}
-                max={100}
-                value={cfg.maxIterations ?? 10}
-                onChange={(e) => updateConfig({ maxIterations: parseInt(e.target.value) || 10 })}
-              />
-            </Field>
+            <p className="text-[10px] text-slate-400 leading-relaxed -mt-2">
+              Connect this node to a supervisor LLM (outgoing) and one or more worker LLMs (incoming).
+            </p>
           </>
         )}
 
@@ -603,6 +597,19 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                 onChange={(e) => updateConfig({ systemPrompt: e.target.value })}
               />
             </Field>
+            <Field label="Max Iterations">
+              <input
+                className={inputCls}
+                type="number"
+                min={1}
+                max={100}
+                value={cfg.maxIterations ?? 10}
+                onChange={(e) => updateConfig({ maxIterations: parseInt(e.target.value) || 10 })}
+              />
+            </Field>
+            <p className="text-[10px] text-slate-400 -mt-2 leading-relaxed">
+              Max tool-calling rounds before the agent stops and returns a response.
+            </p>
           </>
         )}
 

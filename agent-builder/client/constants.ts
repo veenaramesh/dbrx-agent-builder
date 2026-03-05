@@ -65,6 +65,7 @@ export const DEFAULT_LLM_CONFIG: LLMConfig = {
   maxTokens: 1000,
   temperature: 0.1,
   systemPrompt: 'You are a helpful assistant.',
+  maxIterations: 10,
 };
 
 export const DEFAULT_VECTOR_SEARCH_CONFIG: VectorSearchConfig = {
@@ -84,8 +85,7 @@ export const DEFAULT_UC_FUNCTION_CONFIG: UCFunctionConfig = {
 };
 
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
-  description: 'A helpful Databricks AI agent',
-  maxIterations: 10,
+  description: 'Routes between worker agents based on the query',
 };
 
 export const DEFAULT_GROUP_CONFIG: GroupConfig = {
@@ -126,7 +126,7 @@ export const INITIAL_NODES: AgentNodeData[] = [
     id: 'llm-1',
     type: 'llm',
     label: 'Llama 3.3 70B',
-    config: { endpointName: 'databricks-meta-llama-3-3-70b-instruct', model: 'databricks-meta-llama-3-3-70b-instruct', maxTokens: 1024, temperature: 0.1, systemPrompt: 'You are a helpful customer support agent. Be concise and accurate.' },
+    config: { endpointName: 'databricks-meta-llama-3-3-70b-instruct', model: 'databricks-meta-llama-3-3-70b-instruct', maxTokens: 1024, temperature: 0.1, systemPrompt: 'You are a helpful customer support agent. Be concise and accurate.', maxIterations: 10 },
     x: 460, y: 260, width: 190, height: 110,
   },
 ];

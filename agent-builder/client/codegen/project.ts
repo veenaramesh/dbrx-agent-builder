@@ -41,6 +41,7 @@ interface WorkerLLMDef {
   name: string;               // toSnakeCase(node.label)
   endpoint_name: string;      // cfg.endpointName
   model: string;              // cfg.model
+  max_iterations: number;     // cfg.maxIterations — controls inner ReAct loop
   tools: ToolDef[];           // ucf nodes → this worker LLM
   retrievers: RetrieverDef[]; // vs nodes → this worker LLM
 }
@@ -48,6 +49,7 @@ interface WorkerLLMDef {
 interface SupervisorLLMDef {
   endpoint_name: string;
   model: string;
+  max_iterations: number;     // controls how many routing decisions the supervisor makes
 }
 
 // PipelineLLMDef: one stage in a sequential chain (llm-A → llm-B → ...)
@@ -55,6 +57,7 @@ interface PipelineLLMDef {
   name: string;               // toSnakeCase(node.label)
   endpoint_name: string;
   model: string;
+  max_iterations: number;     // controls inner ReAct loop for this stage
   tools: ToolDef[];           // ucf nodes → this stage's LLM
   retrievers: RetrieverDef[]; // vs nodes → this stage's LLM
 }
@@ -64,6 +67,7 @@ interface ParallelBranchDef {
   name: string;               // toSnakeCase(node.label)
   endpoint_name: string;
   model: string;
+  max_iterations: number;     // controls inner ReAct loop for this branch
   tools: ToolDef[];           // ucf nodes → this branch's LLM
   retrievers: RetrieverDef[]; // vs nodes → this branch's LLM
 }
@@ -80,6 +84,7 @@ export interface BundleConfig {
   include_evaluation: 'yes' | 'no';
   vector_search_endpoint: string;
   llm_model_name: string;
+  llm_max_iterations: number;
   github_runner_group: string;
   // All nodes (for stubs, resource YAMLs, deployment notebooks)
   tools: ToolDef[];
@@ -179,7 +184,7 @@ export const buildBundleConfig = (
   const supervisor_llm: SupervisorLLMDef | null = supervisorLLMNode
     ? (() => {
         const cfg = supervisorLLMNode.config as LLMConfig;
-        return { endpoint_name: cfg.endpointName, model: cfg.model };
+        return { endpoint_name: cfg.endpointName, model: cfg.model, max_iterations: cfg.maxIterations ?? 10 };
       })()
     : null;
 
@@ -190,11 +195,12 @@ export const buildBundleConfig = (
       edges.filter(e => e.target === workerNode.id).map(e => e.source)
     );
     return {
-      name:          toSnakeCase(workerNode.label) || `worker_${workerNode.id}`,
-      endpoint_name: cfg.endpointName,
-      model:         cfg.model,
-      tools:         ucfNodes.filter(n => connectedToWorker.has(n.id)).map(makeToolDef),
-      retrievers:    vsNodes.filter(n => connectedToWorker.has(n.id)).map(makeRetrieverDef),
+      name:           toSnakeCase(workerNode.label) || `worker_${workerNode.id}`,
+      endpoint_name:  cfg.endpointName,
+      model:          cfg.model,
+      max_iterations: cfg.maxIterations ?? 10,
+      tools:          ucfNodes.filter(n => connectedToWorker.has(n.id)).map(makeToolDef),
+      retrievers:     vsNodes.filter(n => connectedToWorker.has(n.id)).map(makeRetrieverDef),
     };
   });
 
@@ -217,11 +223,12 @@ export const buildBundleConfig = (
         edges.filter(e => e.target === current!.id).map(e => e.source)
       );
       pipeline_stages.push({
-        name:          toSnakeCase(current.label) || `stage_${pipeline_stages.length + 1}`,
-        endpoint_name: cfg.endpointName,
-        model:         cfg.model,
-        tools:         ucfNodes.filter(n => connectedToStage.has(n.id)).map(makeToolDef),
-        retrievers:    vsNodes.filter(n => connectedToStage.has(n.id)).map(makeRetrieverDef),
+        name:           toSnakeCase(current.label) || `stage_${pipeline_stages.length + 1}`,
+        endpoint_name:  cfg.endpointName,
+        model:          cfg.model,
+        max_iterations: cfg.maxIterations ?? 10,
+        tools:          ucfNodes.filter(n => connectedToStage.has(n.id)).map(makeToolDef),
+        retrievers:     vsNodes.filter(n => connectedToStage.has(n.id)).map(makeRetrieverDef),
       });
       const nextEdge = llmToLLMEdges.find(e => e.source === current!.id);
       current = nextEdge ? llmNodes.find(n => n.id === nextEdge.target) : undefined;
@@ -240,11 +247,12 @@ export const buildBundleConfig = (
       edges.filter(e => e.target === branchNode.id).map(e => e.source)
     );
     return {
-      name:          toSnakeCase(branchNode.label) || `branch_${parallelBranchNodes.indexOf(branchNode) + 1}`,
-      endpoint_name: cfg.endpointName,
-      model:         cfg.model,
-      tools:         ucfNodes.filter(n => connectedToBranch.has(n.id)).map(makeToolDef),
-      retrievers:    vsNodes.filter(n => connectedToBranch.has(n.id)).map(makeRetrieverDef),
+      name:           toSnakeCase(branchNode.label) || `branch_${parallelBranchNodes.indexOf(branchNode) + 1}`,
+      endpoint_name:  cfg.endpointName,
+      model:          cfg.model,
+      max_iterations: cfg.maxIterations ?? 10,
+      tools:          ucfNodes.filter(n => connectedToBranch.has(n.id)).map(makeToolDef),
+      retrievers:     vsNodes.filter(n => connectedToBranch.has(n.id)).map(makeRetrieverDef),
     };
   });
 
@@ -264,6 +272,7 @@ export const buildBundleConfig = (
     include_evaluation:     'yes',
     vector_search_endpoint: vsCfg?.endpointName || 'vs_endpoint',
     llm_model_name:         firstLLMCfg?.endpointName ?? 'databricks-meta-llama-3-3-70b-instruct',
+    llm_max_iterations:     firstLLMCfg?.maxIterations ?? 10,
     github_runner_group:    'Default',
     tools,
     retrievers,

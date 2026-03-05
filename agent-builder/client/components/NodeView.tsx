@@ -42,8 +42,8 @@ const getNodeSubtitle = (node: AgentNodeData): string => {
       return `${cfg.catalog}.${cfg.schema}`;
     }
     case 'agent': {
-      const cfg = node.config as { maxIterations: number };
-      return `max ${cfg.maxIterations} iterations`;
+      const cfg = node.config as { description: string };
+      return cfg.description ? cfg.description.slice(0, 40) : 'supervisor';
     }
     case 'group': return '';
   }
@@ -52,8 +52,8 @@ const getNodeSubtitle = (node: AgentNodeData): string => {
 const getNodeBadge = (node: AgentNodeData): string | null => {
   switch (node.type) {
     case 'llm': {
-      const cfg = node.config as { temperature: number };
-      return `temp ${cfg.temperature}`;
+      const cfg = node.config as { temperature: number; maxIterations: number };
+      return `temp ${cfg.temperature} · max ${cfg.maxIterations ?? 10} iter`;
     }
     case 'vector_search': {
       const cfg = node.config as { numResults: number };

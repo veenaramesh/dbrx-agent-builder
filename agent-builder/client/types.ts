@@ -7,6 +7,7 @@ export interface LLMConfig {
   maxTokens: number;
   temperature: number;
   systemPrompt: string;
+  maxIterations: number;
 }
 
 export interface VectorSearchConfig {
@@ -27,7 +28,6 @@ export interface UCFunctionConfig {
 
 export interface AgentConfig {
   description: string;
-  maxIterations: number;
 }
 
 export interface GroupConfig {
