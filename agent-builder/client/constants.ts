@@ -1,5 +1,5 @@
 
-import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig, LakebaseConfig } from './types';
+import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig, LakebaseConfig, ProjectSettings } from './types';
 
 export const GRID_SIZE = 20;
 
@@ -101,6 +101,12 @@ export const DEFAULT_GROUP_CONFIG: GroupConfig = {
 
 export const DEFAULT_LAKEBASE_CONFIG: LakebaseConfig = {
   instanceName: '',
+  description: '',
+};
+
+export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
+  checkpointEnabled: false,
+  checkpointInstanceName: '',
 };
 
 export const DEFAULT_CONFIGS = {

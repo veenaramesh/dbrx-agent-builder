@@ -3,9 +3,9 @@ import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
   Bot, Cpu, Search, Wrench, X, Copy, Check,
   ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, Download,
-  Unplug, Loader2, CircleDot, Square, Database,
+  Unplug, Loader2, CircleDot, Square, Database, Settings,
 } from 'lucide-react';
-import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig, LakebaseConfig } from '../types';
+import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig, LakebaseConfig, ProjectSettings } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS } from '../constants';
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
@@ -146,6 +146,7 @@ interface HeaderProps {
   auth: DatabricksAuth | null;
   onConnect: (auth: DatabricksAuth) => void;
   onDisconnect: () => void;
+  onOpenSettings: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -163,6 +164,7 @@ export const Header: React.FC<HeaderProps> = ({
   auth,
   onConnect,
   onDisconnect,
+  onOpenSettings,
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [showConnectModal, setShowConnectModal] = useState(false);
@@ -196,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-2">
         <AgentBuilderLogo size={22} />
         <span className="text-[15px] font-bold text-white">
-          Agent<span className="text-[#FF3621]">Builder</span>
+          Agent Brick <span className="text-[#FF3621]">Builder</span>
         </span>
       </div>
 
@@ -291,6 +293,15 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="w-px h-[22px] bg-[#34606f]" />
 
+      {/* Settings */}
+      <button
+        onClick={onOpenSettings}
+        className="w-8 h-8 flex items-center justify-center rounded-md text-white/60 hover:bg-[#243f49] hover:text-white transition-all"
+        title="Project Settings"
+      >
+        <Settings size={15} />
+      </button>
+
       {/* Export Code */}
       <button
         onClick={onExportCode}
@@ -346,6 +357,7 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
     title: 'Tools',
     items: [
       { type: 'uc_function', label: 'UC Function', description: 'Unity Catalog function as a tool' },
+      { type: 'lakebase', label: 'Lakebase', description: 'Postgres database as a query tool' },
     ],
   },
   {
@@ -358,12 +370,6 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
     title: 'Annotations',
     items: [
       { type: 'group', label: 'Group', description: 'Visual group box to annotate subagents' },
-    ],
-  },
-  {
-    title: 'Memory',
-    items: [
-      { type: 'lakebase', label: 'Lakebase', description: 'Postgres checkpoint store for conversation memory' },
     ],
   },
 ];
@@ -390,7 +396,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onDragStart }) => {
   return (
     <div className="w-[220px] bg-slate-800 flex flex-col flex-shrink-0 overflow-y-auto custom-scrollbar border-r border-slate-700">
       <div className="px-3 py-3 border-b border-slate-700">
-        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Components</p>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Bricks</p>
       </div>
 
       {SIDEBAR_SECTIONS.map(section => (
@@ -438,7 +444,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onDragStart }) => {
       {/* Usage tip */}
       <div className="mt-auto px-3 py-3 text-[9px] text-slate-500 leading-relaxed">
         <p className="font-semibold text-slate-400 mb-1">Tips</p>
-        <p>• Drag components onto canvas</p>
+        <p>• Drag bricks onto canvas</p>
         <p>• Use <strong className="text-slate-300">Connect</strong> tool to wire them</p>
         <p>• Click to select &amp; edit properties</p>
         <p>• Double-click to rename</p>
@@ -752,10 +758,18 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                 onChange={(e) => updateConfig({ instanceName: e.target.value })}
               />
             </Field>
+            <Field label="Description (optional)">
+              <textarea
+                className={textareaCls}
+                rows={3}
+                placeholder="Query the orders Lakebase Postgres database."
+                value={cfg.description ?? ''}
+                onChange={(e) => updateConfig({ description: e.target.value })}
+              />
+            </Field>
             <p className="text-[10px] text-slate-400 leading-relaxed -mt-2">
-              Databricks Postgres instance for conversation checkpointing. Thread ID priority:{' '}
-              <code className="text-slate-500">custom_inputs.conversation_id</code> → new{' '}
-              <code className="text-slate-500">uuid7()</code> per request.
+              Connects to LLM as a Postgres query tool. Enable conversation checkpointing in{' '}
+              <strong className="text-slate-500">Project Settings</strong>.
             </p>
           </>
         )}
@@ -921,6 +935,80 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJs
         <div className="px-4 py-2.5 border-t border-[#34606f] text-[10px] text-slate-500">
           Run <code className="text-slate-300 mx-1">databricks bundle init https://github.com/veenaramesh/agentops-demo --config-file config.json</code> to scaffold your project.
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Project Settings Modal ────────────────────────────────────────────────────
+
+interface ProjectSettingsModalProps {
+  settings: ProjectSettings;
+  onUpdate: (s: ProjectSettings) => void;
+  onClose: () => void;
+}
+
+export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ settings, onUpdate, onClose }) => {
+  const [local, setLocal] = useState<ProjectSettings>(settings);
+
+  const save = () => { onUpdate(local); onClose(); };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-[440px] p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-sm font-bold text-slate-800">Project Settings</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+        </div>
+
+        {/* Lakebase Checkpointing */}
+        <div className="mb-5">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            Lakebase Checkpointing
+          </p>
+
+          <label className="flex items-center gap-2.5 cursor-pointer select-none mb-3">
+            <div className="relative">
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={local.checkpointEnabled}
+                onChange={e => setLocal(prev => ({ ...prev, checkpointEnabled: e.target.checked }))}
+              />
+              <div className={`w-8 h-4 rounded-full transition-colors ${local.checkpointEnabled ? 'bg-[#0d9488]' : 'bg-slate-300'}`} />
+              <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${local.checkpointEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+            </div>
+            <span className="text-[12px] font-medium text-slate-700">Enable conversation checkpointing</span>
+          </label>
+
+          {local.checkpointEnabled && (
+            <div className="space-y-2">
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                  Instance Name
+                </label>
+                <input
+                  className={inputCls}
+                  placeholder="my-lakebase-instance"
+                  value={local.checkpointInstanceName}
+                  onChange={e => setLocal(prev => ({ ...prev, checkpointInstanceName: e.target.value }))}
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                Thread ID priority:{' '}
+                <code className="text-slate-500">custom_inputs.conversation_id</code> → new{' '}
+                <code className="text-slate-500">uuid7()</code> per request.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={save}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#FF3621] hover:bg-[#e02d1a] text-white text-xs font-semibold rounded-md transition-colors"
+        >
+          Save
+        </button>
       </div>
     </div>
   );

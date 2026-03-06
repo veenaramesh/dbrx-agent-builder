@@ -36,6 +36,12 @@ export interface GroupConfig {
 
 export interface LakebaseConfig {
   instanceName: string;
+  description: string;
+}
+
+export interface ProjectSettings {
+  checkpointEnabled: boolean;
+  checkpointInstanceName: string;
 }
 
 export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | AgentConfig | GroupConfig | LakebaseConfig;

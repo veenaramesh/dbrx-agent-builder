@@ -73,7 +73,7 @@ const getNodeBadge = (node: AgentNodeData): string | null => {
     case 'group':
       return null;
     case 'lakebase':
-      return 'checkpoint';
+      return 'postgres';
   }
 };
 

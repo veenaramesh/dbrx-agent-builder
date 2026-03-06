@@ -1,4 +1,4 @@
-import { AgentNodeData, EdgeData, LakebaseConfig, LLMConfig, UCFunctionConfig, VectorSearchConfig } from '../types';
+import { AgentNodeData, EdgeData, LakebaseConfig, LLMConfig, ProjectSettings, UCFunctionConfig, VectorSearchConfig } from '../types';
 
 // ── Config JSON ───────────────────────────────────────────────────────────────
 // Maps canvas state → key-value pairs for:
@@ -37,6 +37,12 @@ interface RetrieverDef {
   num_results: number;
 }
 
+interface LakebaseDef {
+  name: string;          // toSnakeCase(node.label)
+  instance_name: string;
+  description: string;
+}
+
 interface WorkerLLMDef {
   name: string;               // toSnakeCase(node.label)
   endpoint_name: string;      // cfg.endpointName
@@ -44,6 +50,7 @@ interface WorkerLLMDef {
   max_iterations: number;     // cfg.maxIterations — controls inner ReAct loop
   tools: ToolDef[];           // ucf nodes → this worker LLM
   retrievers: RetrieverDef[]; // vs nodes → this worker LLM
+  lakebase_tools: LakebaseDef[]; // lakebase nodes → this worker LLM
 }
 
 interface SupervisorLLMDef {
@@ -60,6 +67,7 @@ interface PipelineLLMDef {
   max_iterations: number;     // controls inner ReAct loop for this stage
   tools: ToolDef[];           // ucf nodes → this stage's LLM
   retrievers: RetrieverDef[]; // vs nodes → this stage's LLM
+  lakebase_tools: LakebaseDef[]; // lakebase nodes → this stage's LLM
 }
 
 // ParallelBranchDef: one branch in a parallel fan-out (agent → llm-A, agent → llm-B, ...)
@@ -70,6 +78,7 @@ interface ParallelBranchDef {
   max_iterations: number;     // controls inner ReAct loop for this branch
   tools: ToolDef[];           // ucf nodes → this branch's LLM
   retrievers: RetrieverDef[]; // vs nodes → this branch's LLM
+  lakebase_tools: LakebaseDef[]; // lakebase nodes → this branch's LLM
 }
 
 // ── BundleConfig ──────────────────────────────────────────────────────────────
@@ -92,6 +101,7 @@ export interface BundleConfig {
   // Connectivity-filtered: only nodes with edge → agent
   agent_tools: ToolDef[];
   agent_retrievers: RetrieverDef[];
+  agent_lakebase_tools: LakebaseDef[];
   // Multi-LLM topology
   workflow_pattern: 'single' | 'supervisor_worker' | 'sequential' | 'parallel';
   supervisor_llm: SupervisorLLMDef | null;
@@ -107,6 +117,15 @@ export interface BundleConfig {
 const makeToolDef = (n: AgentNodeData): ToolDef => {
   const cfg = n.config as UCFunctionConfig;
   return { name: cfg.functionName, catalog: cfg.catalog, schema: cfg.schema, description: cfg.description, deploy: cfg.deploy ?? true };
+};
+
+const makeLakebaseDef = (n: AgentNodeData): LakebaseDef => {
+  const cfg = n.config as LakebaseConfig;
+  return {
+    name:          toSnakeCase(n.label) || 'lakebase_tool',
+    instance_name: cfg.instanceName,
+    description:   cfg.description ?? '',
+  };
 };
 
 const makeRetrieverDef = (n: AgentNodeData): RetrieverDef => {
@@ -128,10 +147,11 @@ export const buildBundleConfig = (
   edges: EdgeData[],
   agentName: string,
   host?: string,
+  settings?: ProjectSettings,
 ): BundleConfig => {
-  // Group and lakebase nodes are excluded from topology analysis
-  const lakebaseNode = nodes.find(n => n.type === 'lakebase');
-  const codeNodes = nodes.filter(n => n.type !== 'group' && n.type !== 'lakebase');
+  // Group nodes are excluded from topology analysis; lakebase nodes are included (they connect to LLMs)
+  const codeNodes = nodes.filter(n => n.type !== 'group');
+  const lbNodes   = codeNodes.filter(n => n.type === 'lakebase');
   const agentNode = codeNodes.find(n => n.type === 'agent');
   const llmNodes  = codeNodes.filter(n => n.type === 'llm');
   const vsNodes   = codeNodes.filter(n => n.type === 'vector_search');
@@ -155,8 +175,9 @@ export const buildBundleConfig = (
       ? new Set(edges.filter(e => e.target === primaryLLMForTools.id).map(e => e.source))
       : new Set<string>();
 
-  const agent_tools      = ucfNodes.filter(n => connectedToAgent.has(n.id)).map(makeToolDef);
-  const agent_retrievers = vsNodes.filter(n => connectedToAgent.has(n.id)).map(makeRetrieverDef);
+  const agent_tools           = ucfNodes.filter(n => connectedToAgent.has(n.id)).map(makeToolDef);
+  const agent_retrievers      = vsNodes.filter(n => connectedToAgent.has(n.id)).map(makeRetrieverDef);
+  const agent_lakebase_tools  = lbNodes.filter(n => connectedToAgent.has(n.id)).map(makeLakebaseDef);
 
   // ── Multi-LLM topology ────────────────────────────────────────────────────
 
@@ -204,6 +225,7 @@ export const buildBundleConfig = (
       max_iterations: cfg.maxIterations ?? 10,
       tools:          ucfNodes.filter(n => connectedToWorker.has(n.id)).map(makeToolDef),
       retrievers:     vsNodes.filter(n => connectedToWorker.has(n.id)).map(makeRetrieverDef),
+      lakebase_tools: lbNodes.filter(n => connectedToWorker.has(n.id)).map(makeLakebaseDef),
     };
   });
 
@@ -232,6 +254,7 @@ export const buildBundleConfig = (
         max_iterations: cfg.maxIterations ?? 10,
         tools:          ucfNodes.filter(n => connectedToStage.has(n.id)).map(makeToolDef),
         retrievers:     vsNodes.filter(n => connectedToStage.has(n.id)).map(makeRetrieverDef),
+        lakebase_tools: lbNodes.filter(n => connectedToStage.has(n.id)).map(makeLakebaseDef),
       });
       const nextEdge = llmToLLMEdges.find(e => e.source === current!.id);
       current = nextEdge ? llmNodes.find(n => n.id === nextEdge.target) : undefined;
@@ -256,6 +279,7 @@ export const buildBundleConfig = (
       max_iterations: cfg.maxIterations ?? 10,
       tools:          ucfNodes.filter(n => connectedToBranch.has(n.id)).map(makeToolDef),
       retrievers:     vsNodes.filter(n => connectedToBranch.has(n.id)).map(makeRetrieverDef),
+      lakebase_tools: lbNodes.filter(n => connectedToBranch.has(n.id)).map(makeLakebaseDef),
     };
   });
 
@@ -281,13 +305,14 @@ export const buildBundleConfig = (
     retrievers,
     agent_tools,
     agent_retrievers,
+    agent_lakebase_tools,
     workflow_pattern,
     supervisor_llm,
     worker_llms,
     pipeline_stages,
     parallel_branches,
-    has_lakebase: lakebaseNode != null,
-    lakebase_instance_name: lakebaseNode ? (lakebaseNode.config as LakebaseConfig).instanceName : '',
+    has_lakebase:           settings?.checkpointEnabled ?? false,
+    lakebase_instance_name: settings?.checkpointInstanceName ?? '',
   };
 };
 
@@ -298,8 +323,9 @@ export const downloadProjectZip = async (
   edges: EdgeData[],
   agentName: string,
   host?: string,
+  settings?: ProjectSettings,
 ): Promise<void> => {
-  const config = buildBundleConfig(nodes, edges, agentName, host);
+  const config = buildBundleConfig(nodes, edges, agentName, host, settings);
 
   const response = await fetch(
     `${import.meta.env.VITE_API_URL}/generate`,

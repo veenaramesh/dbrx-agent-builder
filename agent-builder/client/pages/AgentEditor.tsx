@@ -3,6 +3,7 @@ import {
   AgentNodeData,
   AgentNodeType,
   EdgeData,
+  ProjectSettings,
   ViewportTransform,
   ToolType,
   PortPosition,
@@ -14,6 +15,7 @@ import {
   INITIAL_EDGES,
   DEFAULT_NODE_SIZE,
   DEFAULT_CONFIGS,
+  DEFAULT_PROJECT_SETTINGS,
 } from '../constants';
 import {
   snapToGrid,
@@ -32,6 +34,7 @@ import {
   RightPanel,
   ContextMenu,
   CodeExportModal,
+  ProjectSettingsModal,
   DatabricksAuth,
 } from '../components/Controls';
 import { DATABRICKS_MODELS } from '../constants';
@@ -118,6 +121,8 @@ export function AgentEditor() {
   const [showCodeExport, setShowCodeExport] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const [auth, setAuth] = useState<DatabricksAuth | null>(null);
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings>(DEFAULT_PROJECT_SETTINGS);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Undo / redo
   const historyRef = useRef<{ nodes: AgentNodeData[]; edges: EdgeData[] }[]>([]);
@@ -654,12 +659,12 @@ export function AgentEditor() {
   // ── Code export ───────────────────────────────────────────────────────────
 
   const generatedCode = generateAgentCode(nodes, edges, agentName);
-  const generatedConfig = JSON.stringify(buildBundleConfig(nodes, edges, agentName, auth?.host), null, 2);
+  const generatedConfig = JSON.stringify(buildBundleConfig(nodes, edges, agentName, auth?.host, projectSettings), null, 2);
 
   const handleDownloadZip = async () => {
     setIsDownloadingZip(true);
     try {
-      await downloadProjectZip(nodes, edges, agentName, auth?.host);
+      await downloadProjectZip(nodes, edges, agentName, auth?.host, projectSettings);
     } finally {
       setIsDownloadingZip(false);
     }
@@ -684,6 +689,7 @@ export function AgentEditor() {
         auth={auth}
         onConnect={setAuth}
         onDisconnect={() => setAuth(null)}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -821,7 +827,7 @@ export function AgentEditor() {
           {nodes.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="text-center text-slate-400">
-                <p className="text-sm font-medium">Drag components from the sidebar</p>
+                <p className="text-sm font-medium">Drag bricks from the sidebar</p>
                 <p className="text-xs mt-1">to start building your agent</p>
               </div>
             </div>
@@ -857,6 +863,15 @@ export function AgentEditor() {
           code={generatedCode}
           configJson={generatedConfig}
           onClose={() => setShowCodeExport(false)}
+        />
+      )}
+
+      {/* Project settings modal */}
+      {showSettings && (
+        <ProjectSettingsModal
+          settings={projectSettings}
+          onUpdate={setProjectSettings}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>
