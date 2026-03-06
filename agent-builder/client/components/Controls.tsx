@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
-  Bot, Cpu, Search, Wrench, X, Copy, Check,
+  Bot, GitBranch, Cpu, Search, Wrench, X, Copy, Check,
   ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, Download,
   Unplug, Loader2, CircleDot, Square, Database, Settings,
 } from 'lucide-react';
-import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, AgentConfig, GroupConfig, LakebaseConfig, ProjectSettings } from '../types';
+import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS } from '../constants';
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
@@ -363,7 +363,8 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
   {
     title: 'Multi-Agent',
     items: [
-      { type: 'agent', label: 'Agent', description: 'Supervisor node for multi-agent patterns' },
+      { type: 'router', label: 'Router', description: 'Conditionally dispatches to one subagent' },
+      { type: 'supervisor', label: 'Supervisor', description: 'LLM-managed orchestrator with iteration budget' },
     ],
   },
   {
@@ -375,7 +376,8 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
 ];
 
 const sidebarIcons: Record<AgentNodeType, React.ReactNode> = {
-  agent: <Bot size={14} />,
+  supervisor: <Bot size={14} />,
+  router: <GitBranch size={14} />,
   llm: <Cpu size={14} />,
   vector_search: <Search size={14} />,
   uc_function: <Wrench size={14} />,
@@ -492,13 +494,13 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
   const colors = NODE_COLORS[selectedNode.type];
 
-  const updateConfig = (patch: Partial<LLMConfig & VectorSearchConfig & UCFunctionConfig & AgentConfig & GroupConfig & LakebaseConfig>) => {
+  const updateConfig = (patch: Partial<LLMConfig & VectorSearchConfig & UCFunctionConfig & RouterConfig & SupervisorConfig & GroupConfig & LakebaseConfig>) => {
     onUpdateNode({ ...selectedNode, config: { ...selectedNode.config, ...patch } });
   };
 
   const updateLabel = (label: string) => onUpdateNode({ ...selectedNode, label });
 
-  const cfg = selectedNode.config as LLMConfig & VectorSearchConfig & UCFunctionConfig & AgentConfig & GroupConfig & LakebaseConfig;
+  const cfg = selectedNode.config as LLMConfig & VectorSearchConfig & UCFunctionConfig & RouterConfig & SupervisorConfig & GroupConfig & LakebaseConfig;
 
   return (
     <div className="w-[280px] flex-shrink-0 bg-white border-l border-[#DDE3E8] flex flex-col overflow-hidden">
@@ -533,19 +535,49 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           />
         </Field>
 
-        {/* ── Agent (Supervisor) ── */}
-        {selectedNode.type === 'agent' && (
+        {/* ── Router ── */}
+        {selectedNode.type === 'router' && (
           <>
             <Field label="Routing Description">
               <textarea
                 className={textareaCls}
                 rows={4}
-                placeholder="e.g. Routes between a search worker and an analytics worker based on the query type."
+                placeholder="e.g. Routes to the search agent for lookup queries, the analytics agent for data questions."
                 value={cfg.description ?? ''}
                 onChange={(e) => updateConfig({ description: e.target.value })}
               />
             </Field>
             <p className="text-[10px] text-slate-400 leading-relaxed -mt-2">
+              Dispatches to <strong className="text-slate-500">one</strong> subagent per request via a generated routing function.
+              Connect this node to 2+ LLM bricks (outgoing edges only).
+            </p>
+          </>
+        )}
+
+        {/* ── Supervisor ── */}
+        {selectedNode.type === 'supervisor' && (
+          <>
+            <Field label="Orchestration Description">
+              <textarea
+                className={textareaCls}
+                rows={4}
+                placeholder="e.g. Manages a search worker and an analytics worker, routing between them as needed."
+                value={cfg.description ?? ''}
+                onChange={(e) => updateConfig({ description: e.target.value })}
+              />
+            </Field>
+            <Field label="Max Routing Rounds">
+              <input
+                className={inputCls}
+                type="number"
+                min={1}
+                max={100}
+                value={cfg.maxIterations ?? 10}
+                onChange={(e) => updateConfig({ maxIterations: parseInt(e.target.value) || 10 })}
+              />
+            </Field>
+            <p className="text-[10px] text-slate-400 leading-relaxed -mt-2">
+              How many times the supervisor LLM can route between workers before returning a final answer.
               Connect this node to a supervisor LLM (outgoing) and one or more worker LLMs (incoming).
             </p>
           </>

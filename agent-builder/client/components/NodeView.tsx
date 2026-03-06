@@ -1,7 +1,7 @@
 import React from 'react';
 import { AgentNodeData, AgentNodeType, PortPosition } from '../types';
 import { NODE_COLORS } from '../constants';
-import { Bot, Cpu, Search, Wrench, Database } from 'lucide-react';
+import { Bot, Cpu, Search, Wrench, Database, GitBranch } from 'lucide-react';
 
 interface NodeViewProps {
   node: AgentNodeData;
@@ -19,7 +19,8 @@ interface NodeViewProps {
 const NodeIcon = ({ type, color }: { type: AgentNodeType; color: string }) => {
   const props = { size: 16, color };
   switch (type) {
-    case 'agent': return <Bot {...props} />;
+    case 'supervisor': return <Bot {...props} />;
+    case 'router': return <GitBranch {...props} />;
     case 'llm': return <Cpu {...props} />;
     case 'vector_search': return <Search {...props} />;
     case 'uc_function': return <Wrench {...props} />;
@@ -42,9 +43,13 @@ const getNodeSubtitle = (node: AgentNodeData): string => {
       const cfg = node.config as { catalog: string; schema: string; functionName: string };
       return `${cfg.catalog}.${cfg.schema}`;
     }
-    case 'agent': {
+    case 'supervisor': {
       const cfg = node.config as { description: string };
-      return cfg.description ? cfg.description.slice(0, 40) : 'supervisor';
+      return cfg.description ? cfg.description.slice(0, 40) : 'manages workers';
+    }
+    case 'router': {
+      const cfg = node.config as { description: string };
+      return cfg.description ? cfg.description.slice(0, 40) : 'routes to one agent';
     }
     case 'group': return '';
     case 'lakebase': {
@@ -68,8 +73,12 @@ const getNodeBadge = (node: AgentNodeData): string | null => {
       const cfg = node.config as { functionName: string };
       return cfg.functionName;
     }
-    case 'agent':
-      return null;
+    case 'supervisor': {
+      const cfg = node.config as { maxIterations: number };
+      return `max ${cfg.maxIterations ?? 10} routing rounds`;
+    }
+    case 'router':
+      return 'conditional dispatch';
     case 'group':
       return null;
     case 'lakebase':

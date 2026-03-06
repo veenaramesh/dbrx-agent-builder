@@ -1,4 +1,4 @@
-import { AgentNodeData, EdgeData, LakebaseConfig, LLMConfig, ProjectSettings, UCFunctionConfig, VectorSearchConfig } from '../types';
+import { AgentNodeData, EdgeData, LakebaseConfig, LLMConfig, ProjectSettings, RouterConfig, SupervisorConfig, UCFunctionConfig, VectorSearchConfig } from '../types';
 
 // ── Config JSON ───────────────────────────────────────────────────────────────
 // Maps canvas state → key-value pairs for:
@@ -103,11 +103,14 @@ export interface BundleConfig {
   agent_retrievers: RetrieverDef[];
   agent_lakebase_tools: LakebaseDef[];
   // Multi-LLM topology
-  workflow_pattern: 'single' | 'supervisor_worker' | 'sequential' | 'parallel';
+  workflow_pattern: 'single' | 'supervisor_worker' | 'sequential' | 'routed';
   supervisor_llm: SupervisorLLMDef | null;
+  supervisor_max_iterations: number;
+  supervisor_description: string;
+  router_description: string;
   worker_llms: WorkerLLMDef[];
   pipeline_stages: PipelineLLMDef[];   // ordered chain for sequential pattern
-  parallel_branches: ParallelBranchDef[]; // branches for parallel fan-out pattern
+  parallel_branches: ParallelBranchDef[]; // branches for routed pattern
   has_lakebase: boolean;
   lakebase_instance_name: string;
 }
@@ -150,9 +153,11 @@ export const buildBundleConfig = (
   settings?: ProjectSettings,
 ): BundleConfig => {
   // Group nodes are excluded from topology analysis; lakebase nodes are included (they connect to LLMs)
-  const codeNodes = nodes.filter(n => n.type !== 'group');
-  const lbNodes   = codeNodes.filter(n => n.type === 'lakebase');
-  const agentNode = codeNodes.find(n => n.type === 'agent');
+  const codeNodes      = nodes.filter(n => n.type !== 'group');
+  const lbNodes        = codeNodes.filter(n => n.type === 'lakebase');
+  const supervisorNode = codeNodes.find(n => n.type === 'supervisor');
+  const routerNode     = codeNodes.find(n => n.type === 'router');
+  const orchestratorNode = supervisorNode ?? routerNode; // whichever is present
   const llmNodes  = codeNodes.filter(n => n.type === 'llm');
   const vsNodes   = codeNodes.filter(n => n.type === 'vector_search');
   const ucfNodes  = codeNodes.filter(n => n.type === 'uc_function');
@@ -165,12 +170,12 @@ export const buildBundleConfig = (
   const tools      = ucfNodes.map(makeToolDef);
   const retrievers = vsNodes.map(makeRetrieverDef);
 
-  // ── Connectivity: which nodes have a direct edge → agent (or primary LLM) ─
-  // When there's no agent node, tools connect directly to the primary LLM
+  // ── Connectivity: which nodes have a direct edge → orchestrator (or primary LLM) ─
+  // When there's no orchestrator node, tools connect directly to the primary LLM
   // (single tool-calling agent pattern). Use the first LLM as the target.
-  const primaryLLMForTools = agentNode ? undefined : llmNodes[0];
-  const connectedToAgent = agentNode
-    ? new Set(edges.filter(e => e.target === agentNode.id).map(e => e.source))
+  const primaryLLMForTools = orchestratorNode ? undefined : llmNodes[0];
+  const connectedToAgent = orchestratorNode
+    ? new Set(edges.filter(e => e.target === orchestratorNode.id).map(e => e.source))
     : primaryLLMForTools
       ? new Set(edges.filter(e => e.target === primaryLLMForTools.id).map(e => e.source))
       : new Set<string>();
@@ -186,20 +191,20 @@ export const buildBundleConfig = (
     e => llmNodes.some(n => n.id === e.source) && llmNodes.some(n => n.id === e.target)
   );
 
-  // Edges from agent → each LLM node (used for supervisor and parallel detection).
-  const agentToLLMEdges = agentNode
-    ? edges.filter(e => e.source === agentNode.id && llmNodes.some(n => n.id === e.target))
+  // Edges from orchestrator → each LLM node.
+  const agentToLLMEdges = orchestratorNode
+    ? edges.filter(e => e.source === orchestratorNode.id && llmNodes.some(n => n.id === e.target))
     : [];
 
-  // Worker LLMs: llm nodes that have an edge INTO the agent (llm → agent).
-  // Only relevant when there are no LLM-to-LLM edges.
-  const workerLLMNodes = agentNode && llmToLLMEdges.length === 0
-    ? llmNodes.filter(n => edges.some(e => e.source === n.id && e.target === agentNode.id))
+  // Worker LLMs: llm nodes that feed back INTO the supervisor (llm → supervisor).
+  // Only relevant when there are no LLM-to-LLM edges and a supervisor is present.
+  const workerLLMNodes = supervisorNode && llmToLLMEdges.length === 0
+    ? llmNodes.filter(n => edges.some(e => e.source === n.id && e.target === supervisorNode.id))
     : [];
 
-  // Supervisor LLM: the llm node that the agent points TO (agent → llm).
-  const supervisorLLMId = agentNode
-    ? edges.find(e => e.source === agentNode.id && llmNodes.some(n => n.id === e.target))?.target
+  // Supervisor LLM: the llm node that the supervisor points TO (supervisor → llm).
+  const supervisorLLMId = supervisorNode
+    ? edges.find(e => e.source === supervisorNode.id && llmNodes.some(n => n.id === e.target))?.target
     : undefined;
   const supervisorLLMNode = supervisorLLMId
     ? llmNodes.find(n => n.id === supervisorLLMId)
@@ -261,9 +266,9 @@ export const buildBundleConfig = (
     }
   }
 
-  // Parallel fan-out: agent connects to 2+ LLMs directly, no worker/sequential edges.
+  // Routed dispatch: router connects to 2+ LLMs directly (router picks one per request).
   const parallelBranchNodes =
-    llmToLLMEdges.length === 0 && workerLLMNodes.length === 0 && agentToLLMEdges.length > 1
+    llmToLLMEdges.length === 0 && workerLLMNodes.length === 0 && routerNode && agentToLLMEdges.length > 1
       ? agentToLLMEdges.map(e => llmNodes.find(n => n.id === e.target)!).filter(Boolean)
       : [];
 
@@ -283,11 +288,23 @@ export const buildBundleConfig = (
     };
   });
 
-  const workflow_pattern: 'single' | 'supervisor_worker' | 'sequential' | 'parallel' =
+  const workflow_pattern: 'single' | 'supervisor_worker' | 'sequential' | 'routed' =
     pipeline_stages.length > 1    ? 'sequential'
     : worker_llms.length > 0      ? 'supervisor_worker'
-    : parallel_branches.length > 1 ? 'parallel'
+    : parallel_branches.length > 1 ? 'routed'
     : 'single';
+
+  const supervisor_max_iterations = supervisorNode
+    ? (supervisorNode.config as SupervisorConfig).maxIterations ?? 10
+    : 10;
+
+  const supervisor_description = supervisorNode
+    ? (supervisorNode.config as SupervisorConfig).description ?? ''
+    : '';
+
+  const router_description = routerNode
+    ? (routerNode.config as RouterConfig).description ?? ''
+    : '';
 
   return {
     project_name:           toProjectName(agentName),
@@ -308,6 +325,9 @@ export const buildBundleConfig = (
     agent_lakebase_tools,
     workflow_pattern,
     supervisor_llm,
+    supervisor_max_iterations,
+    supervisor_description,
+    router_description,
     worker_llms,
     pipeline_stages,
     parallel_branches,

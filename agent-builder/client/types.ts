@@ -1,5 +1,5 @@
 
-export type AgentNodeType = 'agent' | 'llm' | 'vector_search' | 'uc_function' | 'group' | 'lakebase';
+export type AgentNodeType = 'supervisor' | 'router' | 'llm' | 'vector_search' | 'uc_function' | 'group' | 'lakebase';
 
 export interface LLMConfig {
   endpointName: string;
@@ -26,8 +26,13 @@ export interface UCFunctionConfig {
   deploy: boolean;  // true = generate stub + deploy via tools bundle; false = call existing UC function
 }
 
-export interface AgentConfig {
+export interface RouterConfig {
   description: string;
+}
+
+export interface SupervisorConfig {
+  description: string;
+  maxIterations: number;
 }
 
 export interface GroupConfig {
@@ -44,7 +49,7 @@ export interface ProjectSettings {
   checkpointInstanceName: string;
 }
 
-export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | AgentConfig | GroupConfig | LakebaseConfig;
+export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | RouterConfig | SupervisorConfig | GroupConfig | LakebaseConfig;
 
 export interface AgentNodeData {
   id: string;

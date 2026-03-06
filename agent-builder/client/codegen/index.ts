@@ -13,7 +13,7 @@ export const generateAgentCode = (
   _edges: EdgeData[],
   agentName: string
 ): string => {
-  const agentNode  = nodes.find(n => n.type === 'agent');
+  const agentNode  = nodes.find(n => n.type === 'supervisor' || n.type === 'router');
   const llmNodes   = nodes.filter(n => n.type === 'llm');
   const vsNodes    = nodes.filter(n => n.type === 'vector_search');
   const ucfNodes   = nodes.filter(n => n.type === 'uc_function');
