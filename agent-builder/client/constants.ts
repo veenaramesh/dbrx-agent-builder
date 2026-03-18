@@ -1,5 +1,5 @@
 
-import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings } from './types';
+import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig } from './types';
 
 export const GRID_SIZE = 20;
 
@@ -116,9 +116,20 @@ export const DEFAULT_LAKEBASE_CONFIG: LakebaseConfig = {
   description: '',
 };
 
+export const DEFAULT_CICD_CONFIG: CICDConfig = {
+  enabled: false,
+  provider: 'github_actions',
+  staging: { workspaceHost: '', catalog: '', schema: '' },
+  production: { workspaceHost: '', catalog: '', schema: '' },
+  promotionGate: 'manual',
+  evaluationThreshold: 80,
+  runEvaluationOnDeploy: true,
+};
+
 export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   checkpointEnabled: false,
   checkpointInstanceName: '',
+  cicd: DEFAULT_CICD_CONFIG,
 };
 
 export const DEFAULT_CONFIGS = {

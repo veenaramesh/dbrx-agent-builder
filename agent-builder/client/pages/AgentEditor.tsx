@@ -24,7 +24,7 @@ import {
   isNodeIntersectingRect,
   generateAgentCode,
 } from '../utils';
-import { buildBundleConfig, downloadProjectZip } from '../codegen/project';
+import { buildBundleConfig, downloadProjectZip, generateCICDWorkflow } from '../codegen/project';
 import { NodeView } from '../components/NodeView';
 import { GroupView, ResizeCorner } from '../components/GroupView';
 import { EdgeView } from '../components/EdgeView';
@@ -659,7 +659,9 @@ export function AgentEditor() {
   // ── Code export ───────────────────────────────────────────────────────────
 
   const generatedCode = generateAgentCode(nodes, edges, agentName);
-  const generatedConfig = JSON.stringify(buildBundleConfig(nodes, edges, agentName, auth?.host, projectSettings), null, 2);
+  const bundleConfig = buildBundleConfig(nodes, edges, agentName, auth?.host, projectSettings);
+  const generatedConfig = JSON.stringify(bundleConfig, null, 2);
+  const generatedCICDWorkflow = bundleConfig.cicd.enabled ? generateCICDWorkflow(bundleConfig) : undefined;
 
   const handleDownloadZip = async () => {
     setIsDownloadingZip(true);
@@ -862,6 +864,8 @@ export function AgentEditor() {
         <CodeExportModal
           code={generatedCode}
           configJson={generatedConfig}
+          cicdWorkflow={generatedCICDWorkflow}
+          cicdProvider={bundleConfig.cicd.enabled ? bundleConfig.cicd.provider : undefined}
           onClose={() => setShowCodeExport(false)}
         />
       )}

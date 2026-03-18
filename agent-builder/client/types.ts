@@ -44,9 +44,29 @@ export interface LakebaseConfig {
   description: string;
 }
 
+export type CICDProvider = 'github_actions' | 'azure_devops' | 'gitlab_ci';
+export type PromotionGate = 'manual' | 'tests_pass' | 'evaluation_threshold';
+
+export interface CICDEnvironment {
+  workspaceHost: string;
+  catalog: string;
+  schema: string;
+}
+
+export interface CICDConfig {
+  enabled: boolean;
+  provider: CICDProvider;
+  staging: CICDEnvironment;
+  production: CICDEnvironment;
+  promotionGate: PromotionGate;
+  evaluationThreshold: number; // 0–100, used when promotionGate === 'evaluation_threshold'
+  runEvaluationOnDeploy: boolean;
+}
+
 export interface ProjectSettings {
   checkpointEnabled: boolean;
   checkpointInstanceName: string;
+  cicd: CICDConfig;
 }
 
 export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | RouterConfig | SupervisorConfig | GroupConfig | LakebaseConfig;

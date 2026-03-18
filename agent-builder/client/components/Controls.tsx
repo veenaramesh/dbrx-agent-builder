@@ -4,9 +4,10 @@ import {
   Bot, GitBranch, Cpu, Search, Wrench, X, Copy, Check,
   ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, Download,
   Unplug, Loader2, CircleDot, Square, Database, Settings,
+  Rocket, ArrowRight, ShieldCheck, FlaskConical,
 } from 'lucide-react';
-import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings } from '../types';
-import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS } from '../constants';
+import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CICDProvider, PromotionGate, CICDEnvironment } from '../types';
+import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS, DEFAULT_CICD_CONFIG } from '../constants';
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
 
@@ -874,16 +875,27 @@ const DAB_INIT_COMMAND = 'databricks bundle init https://github.com/veenaramesh/
 interface CodeExportModalProps {
   code: string;
   configJson: string;
+  cicdWorkflow?: string;
+  cicdProvider?: string;
   onClose: () => void;
 }
 
-export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJson, onClose }) => {
-  const [tab, setTab] = useState<'agent' | 'config'>('agent');
+const CICD_FILE_NAMES: Record<string, string> = {
+  github_actions: '.github/workflows/deploy.yml',
+  azure_devops:   'azure-pipelines.yml',
+  gitlab_ci:      '.gitlab-ci.yml',
+};
+
+export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJson, cicdWorkflow, cicdProvider, onClose }) => {
+  type TabType = 'agent' | 'config' | 'cicd';
+  const [tab, setTab] = useState<TabType>('agent');
   const [copied, setCopied] = useState(false);
   const [copiedCmd, setCopiedCmd] = useState(false);
 
-  const activeContent = tab === 'agent' ? code : configJson;
-  const activeLabel   = tab === 'agent' ? 'agent.py' : 'config.json';
+  const hasCICD = !!cicdWorkflow;
+  const cicdFileName = cicdProvider ? CICD_FILE_NAMES[cicdProvider] ?? 'ci-cd.yml' : 'ci-cd.yml';
+  const activeContent = tab === 'agent' ? code : tab === 'config' ? configJson : (cicdWorkflow ?? '');
+  const activeLabel   = tab === 'agent' ? 'agent.py' : tab === 'config' ? 'config.json' : cicdFileName;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(activeContent).then(() => {
@@ -937,20 +949,23 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJs
 
         {/* Tabs */}
         <div className="flex border-b border-[#34606f]">
-          {(['agent', 'config'] as const).map((t) => {
-            const label = t === 'agent' ? 'agent.py' : 'config.json';
-            const active = tab === t;
+          {([
+            { id: 'agent' as TabType, label: 'agent.py' },
+            { id: 'config' as TabType, label: 'config.json' },
+            ...(hasCICD ? [{ id: 'cicd' as TabType, label: cicdFileName }] : []),
+          ]).map((t) => {
+            const active = tab === t.id;
             return (
               <button
-                key={t}
-                onClick={() => { setTab(t); setCopied(false); }}
+                key={t.id}
+                onClick={() => { setTab(t.id); setCopied(false); }}
                 className={`px-4 py-2 text-[11px] font-mono font-medium border-b-2 transition-colors ${
                   active
                     ? 'border-[#FF3621] text-white'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {label}
+                {t.label}
               </button>
             );
           })}
@@ -974,6 +989,75 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJs
 
 // ── Project Settings Modal ────────────────────────────────────────────────────
 
+const CICD_PROVIDERS: { id: CICDProvider; label: string; icon: string }[] = [
+  { id: 'github_actions', label: 'GitHub Actions', icon: 'GH' },
+  { id: 'azure_devops',   label: 'Azure DevOps',  icon: 'Az' },
+  { id: 'gitlab_ci',      label: 'GitLab CI',     icon: 'GL' },
+];
+
+const PROMOTION_GATES: { id: PromotionGate; label: string; description: string }[] = [
+  { id: 'manual',                label: 'Manual Approval',       description: 'Require a human to approve promotion to production' },
+  { id: 'tests_pass',           label: 'Tests Pass',             description: 'Promote automatically when all tests pass' },
+  { id: 'evaluation_threshold', label: 'Evaluation Threshold',   description: 'Promote when agent evaluation score meets threshold' },
+];
+
+const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; color?: string }> = ({ checked, onChange, color = '#0d9488' }) => (
+  <div className="relative">
+    <input type="checkbox" className="sr-only" checked={checked} onChange={e => onChange(e.target.checked)} />
+    <div
+      className="w-8 h-4 rounded-full transition-colors cursor-pointer"
+      style={{ backgroundColor: checked ? color : '#cbd5e1' }}
+      onClick={() => onChange(!checked)}
+    />
+    <div
+      className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform pointer-events-none ${checked ? 'translate-x-4' : 'translate-x-0'}`}
+    />
+  </div>
+);
+
+const EnvironmentFields: React.FC<{
+  label: string;
+  env: CICDEnvironment;
+  onChange: (env: CICDEnvironment) => void;
+  color: string;
+}> = ({ label, env, onChange, color }) => (
+  <div className="border border-slate-200 rounded-lg p-3 space-y-2.5">
+    <div className="flex items-center gap-2 mb-1">
+      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">{label}</span>
+    </div>
+    <div>
+      <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Workspace Host</label>
+      <input
+        className={inputCls}
+        placeholder="https://adb-xxxx.azuredatabricks.net"
+        value={env.workspaceHost}
+        onChange={e => onChange({ ...env, workspaceHost: e.target.value })}
+      />
+    </div>
+    <div className="flex gap-2">
+      <div className="flex-1">
+        <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Catalog</label>
+        <input
+          className={inputCls}
+          placeholder="main"
+          value={env.catalog}
+          onChange={e => onChange({ ...env, catalog: e.target.value })}
+        />
+      </div>
+      <div className="flex-1">
+        <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Schema</label>
+        <input
+          className={inputCls}
+          placeholder="default"
+          value={env.schema}
+          onChange={e => onChange({ ...env, schema: e.target.value })}
+        />
+      </div>
+    </div>
+  </div>
+);
+
 interface ProjectSettingsModalProps {
   settings: ProjectSettings;
   onUpdate: (s: ProjectSettings) => void;
@@ -981,66 +1065,251 @@ interface ProjectSettingsModalProps {
 }
 
 export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ settings, onUpdate, onClose }) => {
-  const [local, setLocal] = useState<ProjectSettings>(settings);
+  const [local, setLocal] = useState<ProjectSettings>({
+    ...settings,
+    cicd: settings.cicd ?? DEFAULT_CICD_CONFIG,
+  });
+  const [activeTab, setActiveTab] = useState<'general' | 'cicd'>('general');
+
+  const cicd = local.cicd;
+  const updateCICD = (patch: Partial<CICDConfig>) =>
+    setLocal(prev => ({ ...prev, cicd: { ...prev.cicd, ...patch } }));
 
   const save = () => { onUpdate(local); onClose(); };
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-[440px] p-6" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5">
+      <div className="bg-white rounded-xl shadow-2xl w-[520px] max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-0">
           <h2 className="text-sm font-bold text-slate-800">Project Settings</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
         </div>
 
-        {/* Lakebase Checkpointing */}
-        <div className="mb-5">
-          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
-            Lakebase Checkpointing
-          </p>
+        {/* Tabs */}
+        <div className="flex border-b border-slate-200 px-6 mt-3">
+          {([
+            { id: 'general' as const, label: 'General', icon: <Settings size={12} /> },
+            { id: 'cicd' as const, label: 'CI / CD', icon: <Rocket size={12} /> },
+          ]).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? 'border-[#FF3621] text-[#FF3621]'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-          <label className="flex items-center gap-2.5 cursor-pointer select-none mb-3">
-            <div className="relative">
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={local.checkpointEnabled}
-                onChange={e => setLocal(prev => ({ ...prev, checkpointEnabled: e.target.checked }))}
-              />
-              <div className={`w-8 h-4 rounded-full transition-colors ${local.checkpointEnabled ? 'bg-[#0d9488]' : 'bg-slate-300'}`} />
-              <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${local.checkpointEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
-            </div>
-            <span className="text-[12px] font-medium text-slate-700">Enable conversation checkpointing</span>
-          </label>
-
-          {local.checkpointEnabled && (
-            <div className="space-y-2">
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                  Instance Name
-                </label>
-                <input
-                  className={inputCls}
-                  placeholder="my-lakebase-instance"
-                  value={local.checkpointInstanceName}
-                  onChange={e => setLocal(prev => ({ ...prev, checkpointInstanceName: e.target.value }))}
-                />
-              </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed">
-                Thread ID priority:{' '}
-                <code className="text-slate-500">custom_inputs.conversation_id</code> → new{' '}
-                <code className="text-slate-500">uuid7()</code> per request.
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
+          {activeTab === 'general' && (
+            <div>
+              {/* Lakebase Checkpointing */}
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                Lakebase Checkpointing
               </p>
+
+              <label className="flex items-center gap-2.5 cursor-pointer select-none mb-3">
+                <Toggle
+                  checked={local.checkpointEnabled}
+                  onChange={v => setLocal(prev => ({ ...prev, checkpointEnabled: v }))}
+                />
+                <span className="text-[12px] font-medium text-slate-700">Enable conversation checkpointing</span>
+              </label>
+
+              {local.checkpointEnabled && (
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                      Instance Name
+                    </label>
+                    <input
+                      className={inputCls}
+                      placeholder="my-lakebase-instance"
+                      value={local.checkpointInstanceName}
+                      onChange={e => setLocal(prev => ({ ...prev, checkpointInstanceName: e.target.value }))}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Thread ID priority:{' '}
+                    <code className="text-slate-500">custom_inputs.conversation_id</code> → new{' '}
+                    <code className="text-slate-500">uuid7()</code> per request.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'cicd' && (
+            <div className="space-y-5">
+              {/* Enable CI/CD */}
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <Toggle
+                  checked={cicd.enabled}
+                  onChange={v => updateCICD({ enabled: v })}
+                  color="#FF3621"
+                />
+                <span className="text-[12px] font-medium text-slate-700">Enable CI/CD pipeline</span>
+              </label>
+
+              {cicd.enabled && (
+                <>
+                  {/* Provider */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Provider</p>
+                    <div className="flex gap-2">
+                      {CICD_PROVIDERS.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => updateCICD({ provider: p.id })}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[11px] font-semibold transition-all ${
+                            cicd.provider === p.id
+                              ? 'border-[#FF3621] bg-[#FF3621]/5 text-[#FF3621]'
+                              : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="text-[9px] font-bold bg-slate-100 rounded px-1 py-0.5">{p.icon}</span>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Environments */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Environments</p>
+                    <div className="space-y-3">
+                      <EnvironmentFields
+                        label="Staging"
+                        env={cicd.staging}
+                        onChange={staging => updateCICD({ staging })}
+                        color="#f59e0b"
+                      />
+                      <div className="flex justify-center">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <ArrowRight size={14} />
+                        </div>
+                      </div>
+                      <EnvironmentFields
+                        label="Production"
+                        env={cicd.production}
+                        onChange={production => updateCICD({ production })}
+                        color="#22c55e"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Promotion Gate */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Promotion Gate</p>
+                    <div className="space-y-1.5">
+                      {PROMOTION_GATES.map(gate => (
+                        <label
+                          key={gate.id}
+                          className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                            cicd.promotionGate === gate.id
+                              ? 'border-[#FF3621] bg-[#FF3621]/5'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="promotionGate"
+                            checked={cicd.promotionGate === gate.id}
+                            onChange={() => updateCICD({ promotionGate: gate.id })}
+                            className="mt-0.5 accent-[#FF3621]"
+                          />
+                          <div>
+                            <span className="text-[11px] font-semibold text-slate-700">{gate.label}</span>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{gate.description}</p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+
+                    {cicd.promotionGate === 'evaluation_threshold' && (
+                      <div className="mt-3 ml-6">
+                        <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                          Minimum Score: {cicd.evaluationThreshold}%
+                        </label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={5}
+                          value={cicd.evaluationThreshold}
+                          onChange={e => updateCICD({ evaluationThreshold: parseInt(e.target.value) })}
+                          className="w-full h-1.5 rounded appearance-none cursor-pointer accent-[#FF3621]"
+                        />
+                        <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
+                          <span>0%</span>
+                          <span>100%</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Run evaluation on deploy */}
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <Toggle
+                      checked={cicd.runEvaluationOnDeploy}
+                      onChange={v => updateCICD({ runEvaluationOnDeploy: v })}
+                    />
+                    <div>
+                      <span className="text-[12px] font-medium text-slate-700">Run evaluation on staging deploy</span>
+                      <p className="text-[10px] text-slate-400">Execute agent evaluation suite after deploying to staging</p>
+                    </div>
+                  </label>
+
+                  {/* Pipeline preview */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Pipeline Preview</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {[
+                        { label: 'Push', icon: <Code2 size={10} />, color: '#6366f1' },
+                        { label: 'Validate', icon: <ShieldCheck size={10} />, color: '#0ea5e9' },
+                        { label: 'Deploy Staging', icon: <Rocket size={10} />, color: '#f59e0b' },
+                        ...(cicd.runEvaluationOnDeploy
+                          ? [{ label: 'Evaluate', icon: <FlaskConical size={10} />, color: '#8b5cf6' }]
+                          : []),
+                        { label: cicd.promotionGate === 'manual' ? 'Approve' : 'Gate', icon: <ShieldCheck size={10} />, color: '#ef4444' },
+                        { label: 'Deploy Prod', icon: <Rocket size={10} />, color: '#22c55e' },
+                      ].map((step, i, arr) => (
+                        <React.Fragment key={step.label}>
+                          <div
+                            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold text-white"
+                            style={{ backgroundColor: step.color }}
+                          >
+                            {step.icon}
+                            {step.label}
+                          </div>
+                          {i < arr.length - 1 && <ArrowRight size={10} className="text-slate-300" />}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
 
-        <button
-          onClick={save}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#FF3621] hover:bg-[#e02d1a] text-white text-xs font-semibold rounded-md transition-colors"
-        >
-          Save
-        </button>
+        {/* Footer */}
+        <div className="px-6 pb-5 pt-3 border-t border-slate-100">
+          <button
+            onClick={save}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#FF3621] hover:bg-[#e02d1a] text-white text-xs font-semibold rounded-md transition-colors"
+          >
+            Save
+          </button>
+        </div>
       </div>
     </div>
   );

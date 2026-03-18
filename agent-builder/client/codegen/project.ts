@@ -1,4 +1,5 @@
-import { AgentNodeData, EdgeData, LakebaseConfig, LLMConfig, ProjectSettings, RouterConfig, SupervisorConfig, UCFunctionConfig, VectorSearchConfig } from '../types';
+import { AgentNodeData, CICDConfig, EdgeData, LakebaseConfig, LLMConfig, ProjectSettings, RouterConfig, SupervisorConfig, UCFunctionConfig, VectorSearchConfig } from '../types';
+import { DEFAULT_CICD_CONFIG } from '../constants';
 
 // ── Config JSON ───────────────────────────────────────────────────────────────
 // Maps canvas state → key-value pairs for:
@@ -113,6 +114,8 @@ export interface BundleConfig {
   parallel_branches: ParallelBranchDef[]; // branches for routed pattern
   has_lakebase: boolean;
   lakebase_instance_name: string;
+  // CI/CD
+  cicd: CICDConfig;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -333,7 +336,213 @@ export const buildBundleConfig = (
     parallel_branches,
     has_lakebase:           settings?.checkpointEnabled ?? false,
     lakebase_instance_name: settings?.checkpointInstanceName ?? '',
+    cicd:                   settings?.cicd ?? DEFAULT_CICD_CONFIG,
   };
+};
+
+// ── CI/CD workflow generation ─────────────────────────────────────────────────
+
+export const generateCICDWorkflow = (config: BundleConfig): string => {
+  const { cicd, project_name } = config;
+  if (!cicd.enabled) return '';
+
+  switch (cicd.provider) {
+    case 'github_actions':  return generateGitHubActionsWorkflow(config);
+    case 'azure_devops':    return generateAzureDevOpsWorkflow(config);
+    case 'gitlab_ci':       return generateGitLabCIWorkflow(config);
+    default:                return '';
+  }
+};
+
+const evaluationStep = (config: BundleConfig, indent: string, envLabel: string) => {
+  if (!config.cicd.runEvaluationOnDeploy) return '';
+  const lines = [
+    '',
+    `${indent}- name: Run Agent Evaluation (${envLabel})`,
+    `${indent}  run: |`,
+    `${indent}    databricks bundle run ${config.project_name}_evaluation`,
+  ];
+  if (config.cicd.promotionGate === 'evaluation_threshold') {
+    lines.push(
+      `${indent}    # Check evaluation score meets threshold`,
+      `${indent}    score=$(databricks bundle run ${config.project_name}_evaluation --output json | jq -r '.score')`,
+      `${indent}    if (( $(echo "$score < ${config.cicd.evaluationThreshold / 100}" | bc -l) )); then`,
+      `${indent}      echo "Evaluation score $score below threshold ${config.cicd.evaluationThreshold}%"`,
+      `${indent}      exit 1`,
+      `${indent}    fi`,
+    );
+  }
+  return lines.join('\n');
+};
+
+const generateGitHubActionsWorkflow = (config: BundleConfig): string => {
+  const { cicd, project_name } = config;
+  const needsApproval = cicd.promotionGate === 'manual';
+
+  return `name: Deploy ${project_name}
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate:
+    name: Validate Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Validate bundle
+        run: databricks bundle validate
+        env:
+          DATABRICKS_HOST: \${{ secrets.STAGING_DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: \${{ secrets.STAGING_DATABRICKS_TOKEN }}
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Deploy to staging
+        run: databricks bundle deploy --target staging
+        env:
+          DATABRICKS_HOST: \${{ secrets.STAGING_DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: \${{ secrets.STAGING_DATABRICKS_TOKEN }}${evaluationStep(config, '      ', 'Staging')}
+
+  deploy-production:
+    name: Deploy to Production
+    needs: deploy-staging${needsApproval ? '\n    # Requires manual approval in GitHub environment settings' : ''}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Deploy to production
+        run: databricks bundle deploy --target production
+        env:
+          DATABRICKS_HOST: \${{ secrets.PROD_DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: \${{ secrets.PROD_DATABRICKS_TOKEN }}
+`;
+};
+
+const generateAzureDevOpsWorkflow = (config: BundleConfig): string => {
+  const { cicd, project_name } = config;
+
+  return `trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: Validate
+    displayName: 'Validate Bundle'
+    jobs:
+      - job: validate
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.10'
+          - script: |
+              curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+              databricks bundle validate
+            env:
+              DATABRICKS_HOST: $(STAGING_DATABRICKS_HOST)
+              DATABRICKS_TOKEN: $(STAGING_DATABRICKS_TOKEN)
+
+  - stage: DeployStaging
+    displayName: 'Deploy to Staging'
+    dependsOn: Validate
+    jobs:
+      - deployment: staging
+        environment: staging
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - script: |
+                    curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+                    databricks bundle deploy --target staging
+                  env:
+                    DATABRICKS_HOST: $(STAGING_DATABRICKS_HOST)
+                    DATABRICKS_TOKEN: $(STAGING_DATABRICKS_TOKEN)
+
+  - stage: DeployProduction
+    displayName: 'Deploy to Production'
+    dependsOn: DeployStaging
+    jobs:
+      - deployment: production
+        environment: production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - script: |
+                    curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+                    databricks bundle deploy --target production
+                  env:
+                    DATABRICKS_HOST: $(PROD_DATABRICKS_HOST)
+                    DATABRICKS_TOKEN: $(PROD_DATABRICKS_TOKEN)
+`;
+};
+
+const generateGitLabCIWorkflow = (config: BundleConfig): string => {
+  const { cicd, project_name } = config;
+
+  return `stages:
+  - validate
+  - deploy-staging
+  - deploy-production
+
+variables:
+  DATABRICKS_CLI_VERSION: "latest"
+
+.setup-cli: &setup-cli
+  before_script:
+    - curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+validate:
+  stage: validate
+  <<: *setup-cli
+  script:
+    - databricks bundle validate
+  variables:
+    DATABRICKS_HOST: $STAGING_DATABRICKS_HOST
+    DATABRICKS_TOKEN: $STAGING_DATABRICKS_TOKEN
+
+deploy-staging:
+  stage: deploy-staging
+  <<: *setup-cli
+  script:
+    - databricks bundle deploy --target staging
+  variables:
+    DATABRICKS_HOST: $STAGING_DATABRICKS_HOST
+    DATABRICKS_TOKEN: $STAGING_DATABRICKS_TOKEN
+  environment:
+    name: staging
+
+deploy-production:
+  stage: deploy-production
+  <<: *setup-cli
+  script:
+    - databricks bundle deploy --target production
+  variables:
+    DATABRICKS_HOST: $PROD_DATABRICKS_HOST
+    DATABRICKS_TOKEN: $PROD_DATABRICKS_TOKEN
+  environment:
+    name: production
+  when: ${cicd.promotionGate === 'manual' ? 'manual' : 'on_success'}
+`;
 };
 
 // ── ZIP download ──────────────────────────────────────────────────────────────
