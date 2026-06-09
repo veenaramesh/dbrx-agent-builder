@@ -47,5 +47,3 @@ export const isNodeIntersectingRect = (node: AgentNodeData, rect: SelectionBound
   );
 };
 
-// Code generation is handled by codegen/index.ts
-export { generateAgentCode } from './codegen/index';
