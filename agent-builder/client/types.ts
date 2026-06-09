@@ -16,6 +16,7 @@ export interface VectorSearchConfig {
   columns: string;
   numResults: number;
   textColumn: string;
+  hasChunkedTable: boolean; // true = user already has a chunked Delta table; false = scaffold generates ingestion pipeline
 }
 
 export interface UCFunctionConfig {
@@ -39,10 +40,15 @@ export interface GroupConfig {
   description: string;
 }
 
+export type MemoryType = 'short_term' | 'long_term' | 'both';
+
 export interface LakebaseConfig {
   instanceName: string;
   description: string;
+  memoryType: MemoryType; // agent memory type for LangGraph checkpointer
 }
+
+export type CloudProvider = 'aws' | 'azure' | 'gcp';
 
 export type CICDProvider = 'github_actions' | 'azure_devops' | 'gitlab_ci';
 export type PromotionGate = 'manual' | 'tests_pass' | 'evaluation_threshold';
@@ -66,6 +72,9 @@ export interface CICDConfig {
 export interface ProjectSettings {
   checkpointEnabled: boolean;
   checkpointInstanceName: string;
+  cloud: CloudProvider;
+  hasEvalDataset: boolean;
+  evalScorers: string; // comma-separated: relevance,groundedness,safety,chunk_relevance,guideline_adherence
   cicd: CICDConfig;
 }
 

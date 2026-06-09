@@ -6,7 +6,7 @@ import {
   Unplug, Loader2, CircleDot, Square, Database, Settings,
   Rocket, ArrowRight, ShieldCheck, FlaskConical,
 } from 'lucide-react';
-import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CICDProvider, PromotionGate, CICDEnvironment } from '../types';
+import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CICDProvider, PromotionGate, CICDEnvironment, CloudProvider, MemoryType } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS, DEFAULT_CICD_CONFIG } from '../constants';
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
@@ -46,18 +46,8 @@ const DatabricksConnectModal: React.FC<ConnectModalProps> = ({ onConnect, onClos
     if (!cleanHost || !token.trim()) { setError('Both fields are required.'); return; }
     setLoading(true);
     try {
-      const resp = await fetch(`${import.meta.env.VITE_API_URL}/models`, {
-        headers: {
-          'Authorization': `Bearer ${token.trim()}`,
-          'X-Databricks-Host': cleanHost,
-        },
-      });
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        throw new Error(body.detail ?? `HTTP ${resp.status}`);
-      }
-      const { models } = await resp.json();
-      onConnect({ host: cleanHost, token: token.trim(), models });
+      // Use hardcoded model list — avoids CORS issues with direct Databricks API calls
+      onConnect({ host: cleanHost, token: token.trim(), models: DATABRICKS_MODELS });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Connection failed.');
     } finally {
@@ -705,6 +695,27 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                 onChange={(e) => updateConfig({ numResults: parseInt(e.target.value) || 5 })}
               />
             </Field>
+            {/* Chunked table toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none mt-1">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={cfg.hasChunkedTable ?? false}
+                  onChange={(e) => updateConfig({ hasChunkedTable: e.target.checked })}
+                />
+                <div className={`w-8 h-4 rounded-full transition-colors ${(cfg.hasChunkedTable ?? false) ? 'bg-[#00A972]' : 'bg-slate-300'}`} />
+                <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${(cfg.hasChunkedTable ?? false) ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+              <span className="text-[11px] font-medium text-slate-700">
+                {(cfg.hasChunkedTable ?? false) ? 'Using existing chunked table' : 'Generate ingestion pipeline'}
+              </span>
+            </label>
+            <p className="text-[10px] text-slate-400 -mt-0.5">
+              {(cfg.hasChunkedTable ?? false)
+                ? 'The scaffold will sync from your existing chunked Delta table.'
+                : 'The scaffold will include a DLT pipeline for document ingestion and chunking.'}
+            </p>
           </>
         )}
 
@@ -791,6 +802,17 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                 onChange={(e) => updateConfig({ instanceName: e.target.value })}
               />
             </Field>
+            <Field label="Memory Type">
+              <select
+                className={inputCls}
+                value={cfg.memoryType ?? 'short_term'}
+                onChange={(e) => updateConfig({ memoryType: e.target.value as MemoryType })}
+              >
+                <option value="short_term">Short-term (conversation history)</option>
+                <option value="long_term">Long-term (cross-session memory)</option>
+                <option value="both">Both</option>
+              </select>
+            </Field>
             <Field label="Description (optional)">
               <textarea
                 className={textareaCls}
@@ -801,8 +823,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               />
             </Field>
             <p className="text-[10px] text-slate-400 leading-relaxed -mt-2">
-              Connects to LLM as a Postgres query tool. Enable conversation checkpointing in{' '}
-              <strong className="text-slate-500">Project Settings</strong>.
+              Connects to LLM as a Postgres query tool. Memory type configures the LangGraph checkpointer.
             </p>
           </>
         )}
@@ -870,11 +891,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, nodeId, onDelete
 
 // ── Code Export Modal ─────────────────────────────────────────────────────────
 
-const DAB_INIT_COMMAND = 'databricks bundle init https://github.com/veenaramesh/agentops-demo --config-file config.json';
+const DAB_INIT_COMMAND = 'databricks bundle init https://github.com/databricks-solutions/agentops-stacks --config-file config.json';
 
 interface CodeExportModalProps {
-  code: string;
-  configJson: string;
+  dabConfigJson: string;
+  manifestJson: string;
   cicdWorkflow?: string;
   cicdProvider?: string;
   onClose: () => void;
@@ -886,16 +907,16 @@ const CICD_FILE_NAMES: Record<string, string> = {
   gitlab_ci:      '.gitlab-ci.yml',
 };
 
-export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJson, cicdWorkflow, cicdProvider, onClose }) => {
-  type TabType = 'agent' | 'config' | 'cicd';
-  const [tab, setTab] = useState<TabType>('agent');
+export const CodeExportModal: React.FC<CodeExportModalProps> = ({ dabConfigJson, manifestJson, cicdWorkflow, cicdProvider, onClose }) => {
+  type TabType = 'config' | 'manifest' | 'cicd';
+  const [tab, setTab] = useState<TabType>('config');
   const [copied, setCopied] = useState(false);
   const [copiedCmd, setCopiedCmd] = useState(false);
 
   const hasCICD = !!cicdWorkflow;
   const cicdFileName = cicdProvider ? CICD_FILE_NAMES[cicdProvider] ?? 'ci-cd.yml' : 'ci-cd.yml';
-  const activeContent = tab === 'agent' ? code : tab === 'config' ? configJson : (cicdWorkflow ?? '');
-  const activeLabel   = tab === 'agent' ? 'agent.py' : tab === 'config' ? 'config.json' : cicdFileName;
+  const activeContent = tab === 'config' ? dabConfigJson : tab === 'manifest' ? manifestJson : (cicdWorkflow ?? '');
+  const activeLabel   = tab === 'config' ? 'config.json (agentops-stacks)' : tab === 'manifest' ? 'agents_manifest.json' : cicdFileName;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(activeContent).then(() => {
@@ -924,7 +945,7 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJs
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#34606f]">
           <div className="flex items-center gap-2">
             <Code2 size={16} className="text-[#FF3621]" />
-            <span className="text-sm font-bold text-white">Generated Agent Code</span>
+            <span className="text-sm font-bold text-white">Export Configuration</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -950,8 +971,8 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJs
         {/* Tabs */}
         <div className="flex border-b border-[#34606f]">
           {([
-            { id: 'agent' as TabType, label: 'agent.py' },
             { id: 'config' as TabType, label: 'config.json' },
+            { id: 'manifest' as TabType, label: 'agents_manifest.json' },
             ...(hasCICD ? [{ id: 'cicd' as TabType, label: cicdFileName }] : []),
           ]).map((t) => {
             const active = tab === t.id;
@@ -979,8 +1000,9 @@ export const CodeExportModal: React.FC<CodeExportModalProps> = ({ code, configJs
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2.5 border-t border-[#34606f] text-[10px] text-slate-500">
-          Run <code className="text-slate-300 mx-1">databricks bundle init https://github.com/veenaramesh/agentops-demo --config-file config.json</code> to scaffold your project.
+        <div className="px-4 py-2.5 border-t border-[#34606f] text-[10px] text-slate-500 leading-relaxed">
+          <span className="text-slate-400 font-medium">1.</span> <code className="text-slate-300">databricks bundle init https://github.com/databricks-solutions/agentops-stacks --config-file config.json</code><br />
+          <span className="text-slate-400 font-medium">2.</span> Copy <code className="text-slate-300">agents_manifest.json</code> into the project, then run <code className="text-slate-300">python scripts/generate_agents.py</code>
         </div>
       </div>
     </div>
@@ -1110,40 +1132,105 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ sett
         {/* Content */}
         <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
           {activeTab === 'general' && (
-            <div>
+            <div className="space-y-6">
+              {/* Cloud Provider */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                  Cloud Provider
+                </p>
+                <div className="flex gap-2">
+                  {([
+                    { id: 'aws' as CloudProvider, label: 'AWS' },
+                    { id: 'azure' as CloudProvider, label: 'Azure' },
+                    { id: 'gcp' as CloudProvider, label: 'GCP' },
+                  ]).map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => setLocal(prev => ({ ...prev, cloud: c.id }))}
+                      className={`flex-1 px-3 py-2 rounded-lg border text-[11px] font-semibold transition-all ${
+                        local.cloud === c.id
+                          ? 'border-[#FF3621] bg-[#FF3621]/5 text-[#FF3621]'
+                          : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  Determines CI/CD auth blocks in the generated scaffold.
+                </p>
+              </div>
+
               {/* Lakebase Checkpointing */}
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
-                Lakebase Checkpointing
-              </p>
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                  Lakebase Checkpointing
+                </p>
 
-              <label className="flex items-center gap-2.5 cursor-pointer select-none mb-3">
-                <Toggle
-                  checked={local.checkpointEnabled}
-                  onChange={v => setLocal(prev => ({ ...prev, checkpointEnabled: v }))}
-                />
-                <span className="text-[12px] font-medium text-slate-700">Enable conversation checkpointing</span>
-              </label>
+                <label className="flex items-center gap-2.5 cursor-pointer select-none mb-3">
+                  <Toggle
+                    checked={local.checkpointEnabled}
+                    onChange={v => setLocal(prev => ({ ...prev, checkpointEnabled: v }))}
+                  />
+                  <span className="text-[12px] font-medium text-slate-700">Enable conversation checkpointing</span>
+                </label>
 
-              {local.checkpointEnabled && (
-                <div className="space-y-2">
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                      Instance Name
-                    </label>
-                    <input
-                      className={inputCls}
-                      placeholder="my-lakebase-instance"
-                      value={local.checkpointInstanceName}
-                      onChange={e => setLocal(prev => ({ ...prev, checkpointInstanceName: e.target.value }))}
-                    />
+                {local.checkpointEnabled && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                        Instance Name
+                      </label>
+                      <input
+                        className={inputCls}
+                        placeholder="my-lakebase-instance"
+                        value={local.checkpointInstanceName}
+                        onChange={e => setLocal(prev => ({ ...prev, checkpointInstanceName: e.target.value }))}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Thread ID priority:{' '}
+                      <code className="text-slate-500">custom_inputs.conversation_id</code> → new{' '}
+                      <code className="text-slate-500">uuid7()</code> per request.
+                    </p>
                   </div>
-                  <p className="text-[10px] text-slate-400 leading-relaxed">
-                    Thread ID priority:{' '}
-                    <code className="text-slate-500">custom_inputs.conversation_id</code> → new{' '}
-                    <code className="text-slate-500">uuid7()</code> per request.
+                )}
+              </div>
+
+              {/* Evaluation */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                  Evaluation
+                </p>
+
+                <label className="flex items-center gap-2.5 cursor-pointer select-none mb-3">
+                  <Toggle
+                    checked={local.hasEvalDataset}
+                    onChange={v => setLocal(prev => ({ ...prev, hasEvalDataset: v }))}
+                    color="#8b5cf6"
+                  />
+                  <div>
+                    <span className="text-[12px] font-medium text-slate-700">I have an evaluation dataset</span>
+                    <p className="text-[10px] text-slate-400">If not, the scaffold includes a dataset creation notebook</p>
+                  </div>
+                </label>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                    Eval Scorers
+                  </label>
+                  <input
+                    className={inputCls}
+                    placeholder="relevance,groundedness,safety"
+                    value={local.evalScorers}
+                    onChange={e => setLocal(prev => ({ ...prev, evalScorers: e.target.value }))}
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Comma-separated MLflow scorers: relevance, groundedness, safety, chunk_relevance, guideline_adherence
                   </p>
                 </div>
-              )}
+              </div>
             </div>
           )}
 

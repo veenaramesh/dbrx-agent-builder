@@ -1,5 +1,5 @@
 
-import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig } from './types';
+import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CloudProvider } from './types';
 
 export const GRID_SIZE = 20;
 
@@ -88,6 +88,7 @@ export const DEFAULT_VECTOR_SEARCH_CONFIG: VectorSearchConfig = {
   columns: 'id, content',
   numResults: 5,
   textColumn: 'content',
+  hasChunkedTable: false,
 };
 
 export const DEFAULT_UC_FUNCTION_CONFIG: UCFunctionConfig = {
@@ -114,6 +115,7 @@ export const DEFAULT_GROUP_CONFIG: GroupConfig = {
 export const DEFAULT_LAKEBASE_CONFIG: LakebaseConfig = {
   instanceName: '',
   description: '',
+  memoryType: 'short_term',
 };
 
 export const DEFAULT_CICD_CONFIG: CICDConfig = {
@@ -129,6 +131,9 @@ export const DEFAULT_CICD_CONFIG: CICDConfig = {
 export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   checkpointEnabled: false,
   checkpointInstanceName: '',
+  cloud: 'aws',
+  hasEvalDataset: false,
+  evalScorers: 'relevance,groundedness,safety',
   cicd: DEFAULT_CICD_CONFIG,
 };
 
@@ -161,7 +166,7 @@ export const INITIAL_NODES: AgentNodeData[] = [
     id: 'vs-1',
     type: 'vector_search',
     label: 'Product Docs Index',
-    config: { endpointName: 'vs-endpoint', indexName: 'main.rag.product_docs_index', columns: 'id, content, source', numResults: 5, textColumn: 'content' },
+    config: { endpointName: 'vs-endpoint', indexName: 'main.rag.product_docs_index', columns: 'id, content, source', numResults: 5, textColumn: 'content', hasChunkedTable: false },
     x: 80, y: 400, width: 190, height: 110,
   },
   {

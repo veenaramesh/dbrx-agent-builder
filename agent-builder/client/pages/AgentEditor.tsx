@@ -22,9 +22,8 @@ import {
   getPortCoordinates,
   generateBezierPath,
   isNodeIntersectingRect,
-  generateAgentCode,
 } from '../utils';
-import { buildBundleConfig, downloadProjectZip, generateCICDWorkflow } from '../codegen/project';
+import { buildBundleConfig, buildDABConfig, buildAgentOpsStacksConfig, downloadProjectZip, generateCICDWorkflow } from '../codegen/project';
 import { NodeView } from '../components/NodeView';
 import { GroupView, ResizeCorner } from '../components/GroupView';
 import { EdgeView } from '../components/EdgeView';
@@ -658,9 +657,10 @@ export function AgentEditor() {
 
   // ── Code export ───────────────────────────────────────────────────────────
 
-  const generatedCode = generateAgentCode(nodes, edges, agentName);
   const bundleConfig = buildBundleConfig(nodes, edges, agentName, auth?.host, projectSettings);
-  const generatedConfig = JSON.stringify(bundleConfig, null, 2);
+  const stacksConfig = buildAgentOpsStacksConfig(nodes, edges, agentName, projectSettings);
+  const generatedDABConfig = JSON.stringify(stacksConfig, null, 2);
+  const generatedManifest = JSON.stringify(bundleConfig, null, 2);
   const generatedCICDWorkflow = bundleConfig.cicd.enabled ? generateCICDWorkflow(bundleConfig) : undefined;
 
   const handleDownloadZip = async () => {
@@ -862,8 +862,8 @@ export function AgentEditor() {
       {/* Code export modal */}
       {showCodeExport && (
         <CodeExportModal
-          code={generatedCode}
-          configJson={generatedConfig}
+          dabConfigJson={generatedDABConfig}
+          manifestJson={generatedManifest}
           cicdWorkflow={generatedCICDWorkflow}
           cicdProvider={bundleConfig.cicd.enabled ? bundleConfig.cicd.provider : undefined}
           onClose={() => setShowCodeExport(false)}

@@ -1,9 +1,13 @@
-import { AgentNodeData, CICDConfig, EdgeData, LakebaseConfig, LLMConfig, ProjectSettings, RouterConfig, SupervisorConfig, UCFunctionConfig, VectorSearchConfig } from '../types';
+import JSZip from 'jszip';
+import Mustache from 'mustache';
+import { AgentNodeData, CICDConfig, CloudProvider, EdgeData, LakebaseConfig, LLMConfig, MemoryType, ProjectSettings, RouterConfig, SupervisorConfig, UCFunctionConfig, VectorSearchConfig } from '../types';
 import { DEFAULT_CICD_CONFIG } from '../constants';
+// @ts-ignore
+import readmeTpl from './templates/dab/readme.mustache?raw';
 
 // ── Config JSON ───────────────────────────────────────────────────────────────
 // Maps canvas state → key-value pairs for:
-//   databricks bundle init https://github.com/veenaramesh/agentops-demo \
+//   databricks bundle init https://github.com/databricks-solutions/agentops-stacks \
 //     --config-file config.json
 
 const toProjectName = (agentName: string) =>
@@ -117,6 +121,125 @@ export interface BundleConfig {
   // CI/CD
   cicd: CICDConfig;
 }
+
+// ── DABConfig (scalar-only subset for databricks bundle init) ────────────────
+
+export interface DABConfig {
+  project_name: string;
+  uc_catalog: string;
+  databricks_host: string;
+  include_retriever: 'yes' | 'no';
+  include_tools: 'yes' | 'no';
+  include_agent: 'yes';
+  include_evaluation: 'yes' | 'no';
+  vector_search_endpoint: string;
+  llm_model_name: string;
+  llm_max_iterations: number;
+  workflow_pattern: 'single' | 'supervisor_worker' | 'sequential' | 'routed';
+  has_lakebase: boolean;
+  lakebase_instance_name: string;
+}
+
+export const buildDABConfig = (
+  nodes: AgentNodeData[],
+  edges: EdgeData[],
+  agentName: string,
+  host?: string,
+  settings?: ProjectSettings,
+): DABConfig => {
+  const full = buildBundleConfig(nodes, edges, agentName, host, settings);
+  return {
+    project_name:           full.project_name,
+    uc_catalog:             full.uc_catalog,
+    databricks_host:        full.databricks_host,
+    include_retriever:      full.include_retriever,
+    include_tools:          full.include_tools,
+    include_agent:          full.include_agent,
+    include_evaluation:     full.include_evaluation,
+    vector_search_endpoint: full.vector_search_endpoint,
+    llm_model_name:         full.llm_model_name,
+    llm_max_iterations:     full.llm_max_iterations,
+    workflow_pattern:        full.workflow_pattern,
+    has_lakebase:           full.has_lakebase,
+    lakebase_instance_name: full.lakebase_instance_name,
+  };
+};
+
+// ── AgentOps Stacks config (maps graph → databricks_template_schema.json) ────
+
+export interface AgentOpsStacksConfig {
+  input_project_name: string;
+  input_root_dir: string;
+  input_initial_agent_name: string;
+  input_cloud: 'aws' | 'azure' | 'gcp';
+  input_cicd_platform: 'github_actions' | 'github_actions_for_github_enterprise_servers' | 'azure_devops' | 'gitlab';
+  input_use_vector_search: 'yes' | 'no';
+  input_has_chunked_table: 'yes' | 'no';
+  input_use_lakebase: 'yes' | 'no';
+  input_memory_type: 'short_term' | 'long_term' | 'both';
+  input_use_uc_functions: 'yes' | 'no';
+  input_uc_functions_exist: 'yes' | 'no';
+  input_has_eval_dataset: 'yes' | 'no';
+  input_eval_scorers: string;
+}
+
+// Map our CICDProvider to agentops-stacks enum values
+const mapCICDProvider = (provider: string): AgentOpsStacksConfig['input_cicd_platform'] => {
+  switch (provider) {
+    case 'azure_devops':  return 'azure_devops';
+    case 'gitlab_ci':     return 'gitlab';
+    default:              return 'github_actions';
+  }
+};
+
+export const buildAgentOpsStacksConfig = (
+  nodes: AgentNodeData[],
+  edges: EdgeData[],
+  agentName: string,
+  settings?: ProjectSettings,
+): AgentOpsStacksConfig => {
+  const projectName = toProjectName(agentName);
+  const llmNodes  = nodes.filter(n => n.type === 'llm');
+  const vsNodes   = nodes.filter(n => n.type === 'vector_search');
+  const ucfNodes  = nodes.filter(n => n.type === 'uc_function');
+  const lbNodes   = nodes.filter(n => n.type === 'lakebase');
+
+  // Initial agent name: first LLM label, snake-cased, or 'default'
+  const firstLLM = llmNodes[0];
+  const initialAgentName = firstLLM
+    ? toSnakeCase(firstLLM.label) || 'default'
+    : 'default';
+
+  // Vector search: use first VS node's hasChunkedTable config
+  const hasVS = vsNodes.length > 0;
+  const firstVSCfg = vsNodes[0]?.config as VectorSearchConfig | undefined;
+  const hasChunkedTable = firstVSCfg?.hasChunkedTable ?? false;
+
+  // Lakebase: derive from nodes or project settings
+  const hasLakebase = lbNodes.length > 0 || (settings?.checkpointEnabled ?? false);
+  const firstLBCfg = lbNodes[0]?.config as LakebaseConfig | undefined;
+  const memoryType: MemoryType = firstLBCfg?.memoryType ?? 'short_term';
+
+  // UC functions: if ALL have deploy=false, they already exist
+  const hasUCF = ucfNodes.length > 0;
+  const allExist = ucfNodes.length > 0 && ucfNodes.every(n => !(n.config as UCFunctionConfig).deploy);
+
+  return {
+    input_project_name:      projectName,
+    input_root_dir:          projectName,
+    input_initial_agent_name: initialAgentName,
+    input_cloud:             settings?.cloud ?? 'aws',
+    input_cicd_platform:     mapCICDProvider(settings?.cicd?.provider ?? 'github_actions'),
+    input_use_vector_search: hasVS ? 'yes' : 'no',
+    input_has_chunked_table: hasVS && hasChunkedTable ? 'yes' : 'no',
+    input_use_lakebase:      hasLakebase ? 'yes' : 'no',
+    input_memory_type:       memoryType,
+    input_use_uc_functions:  hasUCF ? 'yes' : 'no',
+    input_uc_functions_exist: hasUCF && allExist ? 'yes' : 'no',
+    input_has_eval_dataset:  settings?.hasEvalDataset ? 'yes' : 'no',
+    input_eval_scorers:      settings?.evalScorers ?? 'relevance,groundedness,safety',
+  };
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -545,7 +668,13 @@ deploy-production:
 `;
 };
 
-// ── ZIP download ──────────────────────────────────────────────────────────────
+// ── ZIP download (client-side) ────────────────────────────────────────────────
+
+const CICD_PATHS: Record<string, string> = {
+  github_actions: '.github/workflows/deploy.yml',
+  azure_devops:   'azure-pipelines.yml',
+  gitlab_ci:      '.gitlab-ci.yml',
+};
 
 export const downloadProjectZip = async (
   nodes: AgentNodeData[],
@@ -554,22 +683,41 @@ export const downloadProjectZip = async (
   host?: string,
   settings?: ProjectSettings,
 ): Promise<void> => {
-  const config = buildBundleConfig(nodes, edges, agentName, host, settings);
+  const full = buildBundleConfig(nodes, edges, agentName, host, settings);
+  const stacksConfig = buildAgentOpsStacksConfig(nodes, edges, agentName, settings);
 
-  const response = await fetch(
-    `${import.meta.env.VITE_API_URL}/generate`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
-    }
-  );
+  // Build manifest (full config minus cicd — that's a separate file)
+  const { cicd: _cicd, ...manifest } = full;
 
-  const blob = await response.blob();
+  // Render README
+  const readme = Mustache.render(readmeTpl, {
+    agentName,
+    projectName: full.project_name,
+    workflowPattern: full.workflow_pattern,
+    hasVectorSearch: full.include_retriever === 'yes',
+    hasUCFunctions: full.include_tools === 'yes',
+    hasCICD: full.cicd.enabled,
+    llmEndpoint: full.llm_model_name,
+  });
+
+  // Build ZIP
+  const zip = new JSZip();
+  zip.file('config.json', JSON.stringify(stacksConfig, null, 2));
+  zip.file('agents_manifest.json', JSON.stringify(manifest, null, 2));
+  zip.file('README.md', readme);
+
+  // CI/CD workflow (optional)
+  if (full.cicd.enabled) {
+    const cicdYaml = generateCICDWorkflow(full);
+    const cicdPath = CICD_PATHS[full.cicd.provider] ?? 'ci-cd.yml';
+    if (cicdYaml) zip.file(cicdPath, cicdYaml);
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `${config.project_name}.zip`;
+  a.download = `${full.project_name}.zip`;
   a.click();
   URL.revokeObjectURL(url);
 };
