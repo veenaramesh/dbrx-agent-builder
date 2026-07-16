@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
-  Bot, GitBranch, Cpu, Search, Wrench, X, Copy, Check,
+  Cpu, Search, Wrench, X, Copy, Check,
   ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, Download,
   Unplug, Loader2, CircleDot, Square, Database, Settings,
   Rocket, ArrowRight, ShieldCheck, FlaskConical,
 } from 'lucide-react';
-import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CICDProvider, PromotionGate, CICDEnvironment, CloudProvider, MemoryType } from '../types';
+import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CICDProvider, PromotionGate, CICDEnvironment, CloudProvider, MemoryType, EvalDatasetSource } from '../types';
 import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS, DEFAULT_CICD_CONFIG } from '../constants';
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
@@ -195,6 +196,24 @@ export const Header: React.FC<HeaderProps> = ({
 
       <div className="w-px h-[22px] bg-[#34606f] mx-1" />
 
+      {/* Tab switcher */}
+      <nav className="flex items-center gap-1">
+        <Link
+          to="/"
+          className="px-3 h-8 flex items-center rounded-md text-[12px] font-medium bg-[#FF3621] text-white"
+        >
+          Builder
+        </Link>
+        <Link
+          to="/library"
+          className="px-3 h-8 flex items-center rounded-md text-[12px] font-medium text-white/60 hover:bg-[#243f49] hover:text-white transition-all"
+        >
+          Agent Library
+        </Link>
+      </nav>
+
+      <div className="w-px h-[22px] bg-[#34606f] mx-1" />
+
       {/* Agent name */}
       <div className="flex items-center gap-1.5 text-xs text-white/50">
         {isEditingName ? (
@@ -352,23 +371,14 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
     ],
   },
   {
-    title: 'Multi-Agent',
-    items: [
-      { type: 'router', label: 'Router', description: 'Conditionally dispatches to one subagent' },
-      { type: 'supervisor', label: 'Supervisor', description: 'LLM-managed orchestrator with iteration budget' },
-    ],
-  },
-  {
     title: 'Annotations',
     items: [
-      { type: 'group', label: 'Group', description: 'Visual group box to annotate subagents' },
+      { type: 'group', label: 'Group', description: 'Visual group box to annotate agents' },
     ],
   },
 ];
 
 const sidebarIcons: Record<AgentNodeType, React.ReactNode> = {
-  supervisor: <Bot size={14} />,
-  router: <GitBranch size={14} />,
   llm: <Cpu size={14} />,
   vector_search: <Search size={14} />,
   uc_function: <Wrench size={14} />,
@@ -485,13 +495,13 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
   const colors = NODE_COLORS[selectedNode.type];
 
-  const updateConfig = (patch: Partial<LLMConfig & VectorSearchConfig & UCFunctionConfig & RouterConfig & SupervisorConfig & GroupConfig & LakebaseConfig>) => {
+  const updateConfig = (patch: Partial<LLMConfig & VectorSearchConfig & UCFunctionConfig & GroupConfig & LakebaseConfig>) => {
     onUpdateNode({ ...selectedNode, config: { ...selectedNode.config, ...patch } });
   };
 
   const updateLabel = (label: string) => onUpdateNode({ ...selectedNode, label });
 
-  const cfg = selectedNode.config as LLMConfig & VectorSearchConfig & UCFunctionConfig & RouterConfig & SupervisorConfig & GroupConfig & LakebaseConfig;
+  const cfg = selectedNode.config as LLMConfig & VectorSearchConfig & UCFunctionConfig & GroupConfig & LakebaseConfig;
 
   return (
     <div className="w-[280px] flex-shrink-0 bg-white border-l border-[#DDE3E8] flex flex-col overflow-hidden">
@@ -526,53 +536,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           />
         </Field>
 
-        {/* ── Router ── */}
-        {selectedNode.type === 'router' && (
-          <>
-            <Field label="Routing Description">
-              <textarea
-                className={textareaCls}
-                rows={4}
-                placeholder="e.g. Routes to the search agent for lookup queries, the analytics agent for data questions."
-                value={cfg.description ?? ''}
-                onChange={(e) => updateConfig({ description: e.target.value })}
-              />
-            </Field>
-            <p className="text-[10px] text-slate-400 leading-relaxed -mt-2">
-              Dispatches to <strong className="text-slate-500">one</strong> subagent per request via a generated routing function.
-              Connect this node to 2+ LLM bricks (outgoing edges only).
-            </p>
-          </>
-        )}
-
-        {/* ── Supervisor ── */}
-        {selectedNode.type === 'supervisor' && (
-          <>
-            <Field label="Orchestration Description">
-              <textarea
-                className={textareaCls}
-                rows={4}
-                placeholder="e.g. Manages a search worker and an analytics worker, routing between them as needed."
-                value={cfg.description ?? ''}
-                onChange={(e) => updateConfig({ description: e.target.value })}
-              />
-            </Field>
-            <Field label="Max Routing Rounds">
-              <input
-                className={inputCls}
-                type="number"
-                min={1}
-                max={100}
-                value={cfg.maxIterations ?? 10}
-                onChange={(e) => updateConfig({ maxIterations: parseInt(e.target.value) || 10 })}
-              />
-            </Field>
-            <p className="text-[10px] text-slate-400 leading-relaxed -mt-2">
-              How many times the supervisor LLM can route between workers before returning a final answer.
-              Connect this node to a supervisor LLM (outgoing) and one or more worker LLMs (incoming).
-            </p>
-          </>
-        )}
 
         {/* ── LLM ── */}
         {selectedNode.type === 'llm' && (
@@ -1204,30 +1167,22 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ sett
                   Evaluation
                 </p>
 
-                <label className="flex items-center gap-2.5 cursor-pointer select-none mb-3">
-                  <Toggle
-                    checked={local.hasEvalDataset}
-                    onChange={v => setLocal(prev => ({ ...prev, hasEvalDataset: v }))}
-                    color="#8b5cf6"
-                  />
-                  <div>
-                    <span className="text-[12px] font-medium text-slate-700">I have an evaluation dataset</span>
-                    <p className="text-[10px] text-slate-400">If not, the scaffold includes a dataset creation notebook</p>
-                  </div>
-                </label>
-
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                    Eval Scorers
+                    Eval Dataset Source
                   </label>
-                  <input
+                  <select
                     className={inputCls}
-                    placeholder="relevance,groundedness,safety"
-                    value={local.evalScorers}
-                    onChange={e => setLocal(prev => ({ ...prev, evalScorers: e.target.value }))}
-                  />
+                    value={local.evalDatasetSource}
+                    onChange={e => setLocal(prev => ({ ...prev, evalDatasetSource: e.target.value as EvalDatasetSource }))}
+                  >
+                    <option value="synthetic">Synthetic — generate a golden dataset with an LLM simulator</option>
+                    <option value="manual">Manual — scaffold a notebook with example rows to fill in</option>
+                    <option value="production_traces">Production traces — build from traces filtered by tag</option>
+                    <option value="existing">Existing — skip dataset creation (I already have one)</option>
+                  </select>
                   <p className="text-[10px] text-slate-400 mt-1">
-                    Comma-separated MLflow scorers: relevance, groundedness, safety, chunk_relevance, guideline_adherence
+                    How the evaluation dataset for this agent is created.
                   </p>
                 </div>
               </div>

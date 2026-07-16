@@ -1,5 +1,5 @@
 
-import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, RouterConfig, SupervisorConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CloudProvider } from './types';
+import { AgentNodeType, AgentNodeData, EdgeData, LLMConfig, VectorSearchConfig, UCFunctionConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CloudProvider } from './types';
 
 export const GRID_SIZE = 20;
 
@@ -9,18 +9,6 @@ export const NODE_COLORS: Record<AgentNodeType, {
   borderColor: string;
   label: string;
 }> = {
-  supervisor: {
-    headerBg: '#dbeafe',
-    headerText: '#1d4ed8',
-    borderColor: '#2272B4',
-    label: 'Supervisor',
-  },
-  router: {
-    headerBg: '#ffedd5',
-    headerText: '#9a3412',
-    borderColor: '#ea580c',
-    label: 'Router',
-  },
   llm: {
     headerBg: '#fee2e2',
     headerText: '#991b1b',
@@ -64,8 +52,6 @@ export const DATABRICKS_MODELS = [
 ];
 
 export const DEFAULT_NODE_SIZE: Record<AgentNodeType, { width: number; height: number }> = {
-  supervisor: { width: 180, height: 100 },
-  router: { width: 180, height: 90 },
   llm: { width: 180, height: 110 },
   vector_search: { width: 190, height: 110 },
   uc_function: { width: 180, height: 90 },
@@ -99,15 +85,6 @@ export const DEFAULT_UC_FUNCTION_CONFIG: UCFunctionConfig = {
   deploy: true,
 };
 
-export const DEFAULT_ROUTER_CONFIG: RouterConfig = {
-  description: 'Routes to one agent based on the query',
-};
-
-export const DEFAULT_SUPERVISOR_CONFIG: SupervisorConfig = {
-  description: 'Manages worker agents, routing between them as needed',
-  maxIterations: 10,
-};
-
 export const DEFAULT_GROUP_CONFIG: GroupConfig = {
   description: '',
 };
@@ -132,14 +109,11 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   checkpointEnabled: false,
   checkpointInstanceName: '',
   cloud: 'aws',
-  hasEvalDataset: false,
-  evalScorers: 'relevance,groundedness,safety',
+  evalDatasetSource: 'synthetic',
   cicd: DEFAULT_CICD_CONFIG,
 };
 
 export const DEFAULT_CONFIGS = {
-  supervisor: DEFAULT_SUPERVISOR_CONFIG,
-  router: DEFAULT_ROUTER_CONFIG,
   llm: DEFAULT_LLM_CONFIG,
   vector_search: DEFAULT_VECTOR_SEARCH_CONFIG,
   uc_function: DEFAULT_UC_FUNCTION_CONFIG,

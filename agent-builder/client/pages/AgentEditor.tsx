@@ -23,7 +23,7 @@ import {
   generateBezierPath,
   isNodeIntersectingRect,
 } from '../utils';
-import { buildBundleConfig, buildDABConfig, buildAgentOpsStacksConfig, downloadProjectZip, generateCICDWorkflow } from '../codegen/project';
+import { buildBundleConfig, buildAgentOpsStacksConfig, downloadProjectZip, generateCICDWorkflow } from '../codegen/project';
 import { NodeView } from '../components/NodeView';
 import { GroupView, ResizeCorner } from '../components/GroupView';
 import { EdgeView } from '../components/EdgeView';

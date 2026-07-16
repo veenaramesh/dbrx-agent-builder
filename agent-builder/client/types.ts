@@ -1,5 +1,5 @@
 
-export type AgentNodeType = 'supervisor' | 'router' | 'llm' | 'vector_search' | 'uc_function' | 'group' | 'lakebase';
+export type AgentNodeType = 'llm' | 'vector_search' | 'uc_function' | 'group' | 'lakebase';
 
 export interface LLMConfig {
   endpointName: string;
@@ -27,20 +27,13 @@ export interface UCFunctionConfig {
   deploy: boolean;  // true = generate stub + deploy via tools bundle; false = call existing UC function
 }
 
-export interface RouterConfig {
-  description: string;
-}
-
-export interface SupervisorConfig {
-  description: string;
-  maxIterations: number;
-}
-
 export interface GroupConfig {
   description: string;
 }
 
 export type MemoryType = 'short_term' | 'long_term' | 'both';
+
+export type EvalDatasetSource = 'synthetic' | 'manual' | 'production_traces' | 'existing';
 
 export interface LakebaseConfig {
   instanceName: string;
@@ -73,12 +66,11 @@ export interface ProjectSettings {
   checkpointEnabled: boolean;
   checkpointInstanceName: string;
   cloud: CloudProvider;
-  hasEvalDataset: boolean;
-  evalScorers: string; // comma-separated: relevance,groundedness,safety,chunk_relevance,guideline_adherence
+  evalDatasetSource: EvalDatasetSource; // how to create the eval dataset: synthetic | manual | production_traces | existing
   cicd: CICDConfig;
 }
 
-export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | RouterConfig | SupervisorConfig | GroupConfig | LakebaseConfig;
+export type NodeConfig = LLMConfig | VectorSearchConfig | UCFunctionConfig | GroupConfig | LakebaseConfig;
 
 export interface AgentNodeData {
   id: string;
