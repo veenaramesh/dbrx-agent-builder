@@ -4,3 +4,9 @@
 node_modules/
 dist/
 .DS_Store
+
+# Python backend
+.venv/
+__pycache__/
+*.pyc
+agent-builder/server/data/
