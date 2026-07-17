@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom';
 import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
   Cpu, Search, Wrench, X, Copy, Check,
-  ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon, Download,
-  Unplug, Loader2, CircleDot, Square, Database, Settings,
+  ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon,
+  Loader2, Square, Database, Settings,
   Rocket, ArrowRight, ShieldCheck, FlaskConical,
 } from 'lucide-react';
 import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CICDProvider, PromotionGate, CICDEnvironment, CloudProvider, MemoryType, EvalDatasetSource } from '../types';
-import { NODE_COLORS, DATABRICKS_MODELS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS, DEFAULT_CICD_CONFIG } from '../constants';
+import { NODE_COLORS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS, DEFAULT_CICD_CONFIG } from '../constants';
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
 
@@ -22,105 +22,6 @@ const AgentBuilderLogo = ({ size = 22 }: { size?: number }) => (
   </svg>
 );
 
-// ── Databricks Auth ───────────────────────────────────────────────────────────
-
-export interface DatabricksAuth {
-  host: string;
-  token: string;   // memory-only, never persisted
-  models: string[];
-}
-
-interface ConnectModalProps {
-  onConnect: (auth: DatabricksAuth) => void;
-  onClose: () => void;
-}
-
-const DatabricksConnectModal: React.FC<ConnectModalProps> = ({ onConnect, onClose }) => {
-  const [host, setHost]     = useState('');
-  const [token, setToken]   = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState('');
-
-  const connect = async () => {
-    setError('');
-    const cleanHost = host.trim().replace(/\/$/, '');
-    if (!cleanHost || !token.trim()) { setError('Both fields are required.'); return; }
-    setLoading(true);
-    try {
-      // Use hardcoded model list — avoids CORS issues with direct Databricks API calls
-      onConnect({ host: cleanHost, token: token.trim(), models: DATABRICKS_MODELS });
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Connection failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-[420px] p-6" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold text-slate-800">Connect to Databricks</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
-              Workspace URL
-            </label>
-            <input
-              type="url"
-              className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF3621]/30 focus:border-[#FF3621]"
-              placeholder="https://adb-xxxx.azuredatabricks.net"
-              value={host}
-              onChange={e => setHost(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && connect()}
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
-              Personal Access Token
-            </label>
-            <input
-              type="password"
-              className="w-full border border-slate-200 rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF3621]/30 focus:border-[#FF3621] font-mono"
-              placeholder="dapi••••••••••••••••"
-              value={token}
-              onChange={e => setToken(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && connect()}
-            />
-            <a
-              href="https://docs.databricks.com/aws/en/dev-tools/auth/pat"
-              target="_blank"
-              rel="noreferrer"
-              className="text-[10px] text-[#FF3621] hover:underline mt-1 inline-block"
-            >
-              Generate a token →
-            </a>
-          </div>
-
-          {error && (
-            <p className="text-[11px] text-red-500 bg-red-50 rounded-md px-3 py-2">{error}</p>
-          )}
-
-          <p className="text-[10px] text-slate-400 bg-slate-50 rounded-md px-3 py-2 leading-relaxed">
-            Your token is stored <strong>in memory only</strong> — never saved to disk or sent anywhere except your Databricks workspace.
-          </p>
-
-          <button
-            onClick={connect}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#FF3621] hover:bg-[#e02d1a] disabled:opacity-50 text-white text-xs font-semibold rounded-md transition-colors"
-          >
-            {loading ? <><Loader2 size={13} className="animate-spin" /> Connecting…</> : 'Connect'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ── Header ────────────────────────────────────────────────────────────────────
 
 interface HeaderProps {
@@ -132,14 +33,9 @@ interface HeaderProps {
   canUndo: boolean;
   canRedo: boolean;
   onExportCode: () => void;
-  onDownloadZip: () => void;
-  isDownloadingZip: boolean;
   onDeploy: () => void;
   isDeploying: boolean;
   onAgentNameChange: (name: string) => void;
-  auth: DatabricksAuth | null;
-  onConnect: (auth: DatabricksAuth) => void;
-  onDisconnect: () => void;
   onOpenSettings: () => void;
 }
 
@@ -152,18 +48,12 @@ export const Header: React.FC<HeaderProps> = ({
   canUndo,
   canRedo,
   onExportCode,
-  onDownloadZip,
-  isDownloadingZip,
   onDeploy,
   isDeploying,
   onAgentNameChange,
-  auth,
-  onConnect,
-  onDisconnect,
   onOpenSettings,
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
-  const [showConnectModal, setShowConnectModal] = useState(false);
   const [editedName, setEditedName] = useState(agentName);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -277,36 +167,6 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Databricks connection */}
-      {auth ? (
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 h-8 bg-[#243f49] border border-[#34606f] rounded-md">
-            <CircleDot size={10} className="text-green-400" />
-            <span className="text-[11px] text-white/70 font-mono max-w-[160px] truncate" title={auth.host}>
-              {auth.host.replace('https://', '')}
-            </span>
-          </div>
-          <button
-            onClick={onDisconnect}
-            className="w-8 h-8 flex items-center justify-center rounded-md text-white/50 hover:bg-[#243f49] hover:text-white transition-all"
-            title="Disconnect"
-          >
-            <Unplug size={14} />
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => setShowConnectModal(true)}
-          className="flex items-center gap-2 px-3 h-8 bg-[#243f49] hover:bg-[#2e5060] text-white/70 hover:text-white text-xs font-medium rounded-md transition-colors border border-[#34606f]"
-          title="Connect to Databricks to fetch live model list"
-        >
-          <CircleDot size={11} className="text-white/30" />
-          Connect Databricks
-        </button>
-      )}
-
-      <div className="w-px h-[22px] bg-[#34606f]" />
-
       {/* Settings */}
       <button
         onClick={onOpenSettings}
@@ -326,17 +186,6 @@ export const Header: React.FC<HeaderProps> = ({
         Export Code
       </button>
 
-      {/* Download ZIP */}
-      <button
-        onClick={onDownloadZip}
-        disabled={isDownloadingZip}
-        className="flex items-center gap-2 px-3 h-8 bg-[#243f49] hover:bg-[#2e5060] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors border border-[#34606f]"
-        title="Download full DAB project as ZIP"
-      >
-        <Download size={14} />
-        {isDownloadingZip ? 'Generating…' : 'Download DAB'}
-      </button>
-
       {/* Deploy to Workspace */}
       <button
         onClick={onDeploy}
@@ -347,13 +196,6 @@ export const Header: React.FC<HeaderProps> = ({
         {isDeploying ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
         {isDeploying ? 'Deploying…' : 'Deploy to Workspace'}
       </button>
-
-      {showConnectModal && (
-        <DatabricksConnectModal
-          onConnect={(a) => { onConnect(a); setShowConnectModal(false); }}
-          onClose={() => setShowConnectModal(false)}
-        />
-      )}
     </div>
   );
 };

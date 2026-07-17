@@ -23,7 +23,7 @@ import {
   generateBezierPath,
   isNodeIntersectingRect,
 } from '../utils';
-import { buildBundleConfig, buildAgentOpsStacksConfig, buildProjectFiles, downloadProjectZip, generateCICDWorkflow } from '../codegen/project';
+import { buildBundleConfig, buildAgentOpsStacksConfig, buildProjectFiles, generateCICDWorkflow } from '../codegen/project';
 import { deployToWorkspace, DeployResult } from '../api/deploy';
 import { NodeView } from '../components/NodeView';
 import { GroupView, ResizeCorner } from '../components/GroupView';
@@ -36,7 +36,6 @@ import {
   CodeExportModal,
   ProjectSettingsModal,
   DeployResultModal,
-  DatabricksAuth,
 } from '../components/Controls';
 import { DATABRICKS_MODELS } from '../constants';
 
@@ -120,12 +119,10 @@ export function AgentEditor() {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<CtxMenu | null>(null);
   const [showCodeExport, setShowCodeExport] = useState(false);
-  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployResult, setDeployResult] = useState<DeployResult | null>(null);
   const [deployError, setDeployError] = useState<string | null>(null);
   const [showDeployResult, setShowDeployResult] = useState(false);
-  const [auth, setAuth] = useState<DatabricksAuth | null>(null);
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(DEFAULT_PROJECT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -663,20 +660,11 @@ export function AgentEditor() {
 
   // ── Code export ───────────────────────────────────────────────────────────
 
-  const bundleConfig = buildBundleConfig(nodes, edges, agentName, auth?.host, projectSettings);
+  const bundleConfig = buildBundleConfig(nodes, edges, agentName, undefined, projectSettings);
   const stacksConfig = buildAgentOpsStacksConfig(nodes, edges, agentName, projectSettings);
   const generatedDABConfig = JSON.stringify(stacksConfig, null, 2);
   const generatedManifest = JSON.stringify(bundleConfig, null, 2);
   const generatedCICDWorkflow = bundleConfig.cicd.enabled ? generateCICDWorkflow(bundleConfig) : undefined;
-
-  const handleDownloadZip = async () => {
-    setIsDownloadingZip(true);
-    try {
-      await downloadProjectZip(nodes, edges, agentName, auth?.host, projectSettings);
-    } finally {
-      setIsDownloadingZip(false);
-    }
-  };
 
   const handleDeploy = async () => {
     setIsDeploying(true);
@@ -684,7 +672,7 @@ export function AgentEditor() {
     setDeployResult(null);
     try {
       const { projectName, initialAgentName, files } =
-        buildProjectFiles(nodes, edges, agentName, auth?.host, projectSettings);
+        buildProjectFiles(nodes, edges, agentName, undefined, projectSettings);
       const result = await deployToWorkspace({
         project_name: projectName,
         initial_agent_name: initialAgentName,
@@ -712,14 +700,9 @@ export function AgentEditor() {
         canUndo={canUndo}
         canRedo={canRedo}
         onExportCode={() => setShowCodeExport(true)}
-        onDownloadZip={handleDownloadZip}
-        isDownloadingZip={isDownloadingZip}
         onDeploy={handleDeploy}
         isDeploying={isDeploying}
         onAgentNameChange={setAgentName}
-        auth={auth}
-        onConnect={setAuth}
-        onDisconnect={() => setAuth(null)}
         onOpenSettings={() => setShowSettings(true)}
       />
 
@@ -872,7 +855,7 @@ export function AgentEditor() {
           onDeleteNode={deleteNode}
           onDuplicateNode={duplicateNode}
           onClose={() => setSelectedNodeIds(new Set())}
-          models={auth?.models ?? DATABRICKS_MODELS}
+          models={DATABRICKS_MODELS}
         />
       </div>
 
