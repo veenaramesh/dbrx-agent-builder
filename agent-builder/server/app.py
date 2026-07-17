@@ -82,6 +82,42 @@ def whoami(request: Request) -> dict:
     }
 
 
+@app.get("/api/diag/sp-reads")
+def diag_sp_reads() -> dict:
+    """Diagnostic: can the app service principal READ the APIs Phase D needs
+    (serving endpoints, MLflow experiments/runs)? Reports per-API ok/error so we
+    know what's actually permitted before building the readiness scorecard.
+    """
+    out: dict = {}
+    try:
+        w = service_principal_client()
+    except Exception as e:
+        return {"service_principal_client": f"{type(e).__name__}: {e}"}
+
+    # Who is the SP?
+    try:
+        out["sp_identity"] = w.current_user.me().user_name
+    except Exception as e:
+        out["sp_identity"] = f"ERR {type(e).__name__}: {e}"
+
+    # 1. Serving endpoints list
+    try:
+        eps = list(w.serving_endpoints.list())
+        out["serving_endpoints"] = {"ok": True, "count": len(eps),
+                                    "sample": [e.name for e in eps[:3]]}
+    except Exception as e:
+        out["serving_endpoints"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    # 2. MLflow experiments search
+    try:
+        exps = list(w.experiments.list_experiments(max_results=3))
+        out["mlflow_experiments"] = {"ok": True, "sample": [x.name for x in exps[:3]]}
+    except Exception as e:
+        out["mlflow_experiments"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    return out
+
+
 @app.get("/api/agents", response_model=list[Agent])
 def list_agents() -> list[Agent]:
     return store.list()
