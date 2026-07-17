@@ -20,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from auth import user_workspace_client
+from auth import caller_email, service_principal_client
 from deploy import DeployRequest, DeployResult, write_project
 from models import Agent, AgentCreate, AgentUpdate
 from store import RegistryStore
@@ -117,17 +117,19 @@ def delete_agent(agent_id: str) -> Response:
     return Response(status_code=204)
 
 
-# ── Deploy: write a rendered project into the user's workspace ───────────────
+# ── Deploy: write a rendered project into a shared workspace path ────────────
+# Written by the app service principal (no user-auth scope needed), namespaced
+# by the requesting user for attribution.
 @app.post("/api/deploy", response_model=DeployResult)
 def deploy(req: DeployRequest, request: Request) -> DeployResult:
-    ctx = user_workspace_client(request)
+    email = caller_email(request)
     try:
-        result = write_project(ctx.client, ctx.email, req)
+        result = write_project(service_principal_client(), email, req)
     except ValueError as e:
         # Bad input (invalid path / project name).
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:  # SDK / workspace errors
-        raise HTTPException(status_code=502, detail=f"workspace write failed: {e}")
+        raise HTTPException(status_code=502, detail=f"workspace write failed: {type(e).__name__}: {e}")
 
     # Auto-register so the agent shows up in the Library. Best-effort: a
     # registry write failure must not fail the deploy itself.

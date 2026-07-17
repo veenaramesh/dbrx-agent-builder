@@ -63,3 +63,23 @@ def user_workspace_client(request: Request) -> UserContext:
     # No forwarded token: default credentials (CLI profile locally, or the app
     # service principal inside the App).
     return UserContext(client=WorkspaceClient(), email=email, on_behalf_of_user=False)
+
+
+def caller_email(request: Request) -> str | None:
+    """The logged-in user's email/username, forwarded by the App proxy on every
+    request regardless of user-auth scopes. Used for attribution / namespacing
+    even when the write is done by the app service principal.
+    """
+    return request.headers.get(_USER_EMAIL_HEADER) or request.headers.get(_USER_NAME_HEADER)
+
+
+def service_principal_client():
+    """A WorkspaceClient authenticated as the app's own service principal.
+
+    Uses the SDK default credential chain, which in a Databricks App resolves to
+    the app SP (DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET); locally it's
+    the default CLI profile. Files written this way are owned by the SP.
+    """
+    from databricks.sdk import WorkspaceClient
+
+    return WorkspaceClient()
