@@ -62,6 +62,31 @@ SPA fallback so `/library` deep-links work).
 |---|---|
 | `AGENT_REGISTRY_PATH` | Where the Library registry JSON lives. **For durability across restarts, point this at a mounted UC volume** — the default (`data/registry.json`) lives in the container and is lost on redeploy. |
 
+## 4. Grant workspace scope for "Deploy to Workspace"
+
+The **Deploy to Workspace** button writes the rendered DAB into the logged-in
+user's workspace on their behalf. That requires the `workspace` user-auth scope
+on the app — by default an app only gets `iam.current-user:read` /
+`iam.access-control:read`, so workspace writes return
+`403 Invalid scope, required scopes: workspace`.
+
+Grant it once, then redeploy (users re-consent on next login):
+
+```bash
+databricks apps update agent-brick-builder --json \
+  '{"name":"agent-brick-builder","user_api_scopes":["workspace.workspace:read","workspace.workspace:write"]}'
+databricks apps deploy agent-brick-builder \
+  --source-code-path /Workspace/Users/<you>/agent-brick-builder-src
+```
+
+Verify with `databricks apps get agent-brick-builder` — `effective_user_api_scopes`
+should include `workspace.workspace:write` after a user has logged in and
+consented via the browser.
+
+> Note: the scoped token is minted during the **browser SSO flow**. Calling
+> `/api/deploy` with a raw CLI/PAT token (e.g. via curl) forwards that token
+> unchanged and will still 403 — test Deploy from the app UI in a browser.
+
 ## Notes / known limitations (Phase A)
 
 - **CDN dependencies.** The client currently loads Tailwind and Google Fonts

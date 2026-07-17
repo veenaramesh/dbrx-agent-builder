@@ -10,6 +10,13 @@
 #
 # The Databricks Apps runtime installs requirements.txt (app root) and injects
 # the port to bind via DATABRICKS_APP_PORT; server/app.py honors it.
+#
+# USER AUTHORIZATION: "Deploy to Workspace" writes files into the user's
+# workspace on their behalf, which needs the workspace scope on the app's
+# user-authorization token. Grant it once (then redeploy + re-consent):
+#   databricks apps update agent-brick-builder --json \
+#     '{"name":"agent-brick-builder","user_api_scopes":["workspace.workspace:read","workspace.workspace:write"]}'
+# See docs/deploy-app.md.
 
 command: ["python", "server/app.py"]
 
