@@ -245,6 +245,7 @@ def deploy(req: DeployRequest, request: Request) -> DeployResult:
         existing = next((a for a in store.list() if a.name == agent_name), None)
         payload = AgentCreate(
             name=agent_name,
+            project=req.project_name,   # for /Shared/<project>_<stage> experiment
             workspace=result.user,
             model=req.model,
             endpoint=req.endpoint,

@@ -34,6 +34,7 @@ export interface Readiness {
 export interface RegistryAgent {
   id: string;
   name: string;
+  project: string;
   endpoint: string;
   app_url: string;
   experiment: string;

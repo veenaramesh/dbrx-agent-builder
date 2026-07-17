@@ -26,7 +26,7 @@ const AgentBuilderLogo = ({ size = 22 }: { size?: number }) => (
 const nowIso = '2026-07-16T00:00:00Z';
 const SAMPLE_AGENTS: RegistryAgent[] = [
   {
-    id: 'sample-1', name: 'support_copilot', endpoint: 'support-copilot', app_url: '', experiment: '',
+    id: 'sample-1', name: 'support_copilot', project: 'support_copilot', endpoint: 'support-copilot', app_url: '', experiment: '',
     model: 'databricks-meta-llama-3-3-70b-instruct', workspace: 'field-eng.cloud.databricks.com',
     stage: 'staging', registered_at: nowIso, updated_at: nowIso, status: 'ready', requests_24h: 4820,
     signed_off_by: 'veena.ramesh@databricks.com', signed_off_at: nowIso,
@@ -47,7 +47,7 @@ const SAMPLE_AGENTS: RegistryAgent[] = [
     },
   },
   {
-    id: 'sample-2', name: 'sales_researcher', endpoint: 'sales-researcher', app_url: '', experiment: '',
+    id: 'sample-2', name: 'sales_researcher', project: 'sales_researcher', endpoint: 'sales-researcher', app_url: '', experiment: '',
     model: 'databricks-claude-3-7-sonnet', workspace: 'field-eng.cloud.databricks.com',
     stage: 'test', registered_at: nowIso, updated_at: nowIso, status: 'ready', requests_24h: 1290,
     signed_off_by: null, signed_off_at: null,
@@ -66,7 +66,7 @@ const SAMPLE_AGENTS: RegistryAgent[] = [
     },
   },
   {
-    id: 'sample-3', name: 'sql_analyst', endpoint: 'sql-analyst', app_url: '', experiment: '',
+    id: 'sample-3', name: 'sql_analyst', project: 'sql_analyst', endpoint: 'sql-analyst', app_url: '', experiment: '',
     model: 'databricks-meta-llama-3-1-405b-instruct', workspace: 'field-eng.cloud.databricks.com',
     stage: 'dev', registered_at: nowIso, updated_at: nowIso, status: 'failed', requests_24h: 0,
     signed_off_by: null, signed_off_at: null,
@@ -85,7 +85,7 @@ const SAMPLE_AGENTS: RegistryAgent[] = [
     },
   },
   {
-    id: 'sample-4', name: 'onboarding_bot', endpoint: '', app_url: '', experiment: '',
+    id: 'sample-4', name: 'onboarding_bot', project: 'onboarding_bot', endpoint: '', app_url: '', experiment: '',
     model: 'databricks-meta-llama-3-3-70b-instruct', workspace: 'field-eng.cloud.databricks.com',
     stage: 'dev', registered_at: nowIso, updated_at: nowIso, status: 'unknown', requests_24h: null,
     signed_off_by: null, signed_off_at: null,

@@ -44,6 +44,16 @@ def next_stage(stage: Stage) -> Stage | None:
     return STAGE_ORDER[i + 1] if i + 1 < len(STAGE_ORDER) else None
 
 
+def experiment_for(project: str, stage: Stage | str) -> str:
+    """MLflow experiment path an agentops-stacks bundle creates for a given
+    project + deploy target. Matches the template's resources/experiment.yml:
+        name: /Shared/${bundle.name}_${bundle.target}
+    where bundle.name == input_project_name and target == the stage.
+    """
+    s = stage.value if isinstance(stage, Stage) else str(stage)
+    return f"/Shared/{project}_{s}"
+
+
 class CheckStatus(str, Enum):
     pass_ = "pass"
     warn = "warn"
@@ -77,9 +87,11 @@ class ToolRef(BaseModel):
 
 class AgentBase(BaseModel):
     name: str
+    project: str = ""                # bundle/project name; used to derive the
+                                     # per-stage experiment (/Shared/<project>_<stage>)
     endpoint: str = ""               # serving endpoint name (for live verify)
     app_url: str = ""                # Databricks App URL, if deployed as an App
-    experiment: str = ""             # MLflow experiment path/id (for eval reads)
+    experiment: str = ""             # explicit MLflow experiment override (else derived)
     model: str = ""
     workspace: str = ""
     stage: Stage = Stage.dev
@@ -94,6 +106,7 @@ class AgentCreate(AgentBase):
 class AgentUpdate(BaseModel):
     """Partial update; every field optional."""
     name: Optional[str] = None
+    project: Optional[str] = None
     endpoint: Optional[str] = None
     app_url: Optional[str] = None
     experiment: Optional[str] = None

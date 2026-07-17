@@ -27,6 +27,7 @@ from models import (
     Readiness,
     ReadinessCheck,
     Stage,
+    experiment_for,
     next_stage,
 )
 
@@ -66,23 +67,39 @@ def _deployment_check(w, agent: Agent) -> ReadinessCheck:
         )
 
 
-def _find_experiment(w, agent: Agent):
-    """Resolve the agent's MLflow experiment by explicit path or name match."""
+def _experiment_path(agent: Agent) -> str | None:
+    """The experiment to read eval runs from: an explicit override, else the
+    stage-specific path the bundle creates (/Shared/<project>_<stage>)."""
     if agent.experiment:
-        try:
-            return w.experiments.get_experiment_by_name(agent.experiment)
-        except Exception:
-            pass
+        return agent.experiment
+    if agent.project:
+        return experiment_for(agent.project, agent.stage)
     return None
 
 
+def _find_experiment(w, agent: Agent):
+    """Resolve the agent's MLflow experiment object by its derived path."""
+    path = _experiment_path(agent)
+    if not path:
+        return None
+    try:
+        return w.experiments.get_experiment_by_name(path)
+    except Exception:
+        return None
+
+
 def _eval_check(w, agent: Agent) -> ReadinessCheck:
+    path = _experiment_path(agent)
     exp = _find_experiment(w, agent)
     if exp is None:
+        detail = (
+            f"No eval runs yet at experiment '{path}' — run evaluation to populate."
+            if path else
+            "No experiment linked; deploy from the builder or set one to enable eval."
+        )
         return ReadinessCheck(
             key="eval", label="Evaluation passing & fresh",
-            status=CheckStatus.unknown, blocking=True,
-            detail="No MLflow experiment linked; run evaluation to populate.",
+            status=CheckStatus.unknown, blocking=True, detail=detail,
         )
     exp_id = getattr(getattr(exp, "experiment", exp), "experiment_id", None) or getattr(exp, "experiment_id", None)
     try:
