@@ -16,10 +16,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from auth import user_workspace_client
+from deploy import DeployRequest, DeployResult, write_project
 from models import Agent, AgentCreate, AgentUpdate
 from store import RegistryStore
 
@@ -77,6 +79,31 @@ def delete_agent(agent_id: str) -> Response:
     # 204 must not carry a body; return an explicit empty Response so FastAPI
     # doesn't try to JSON-encode None (which asserts on the 204 status).
     return Response(status_code=204)
+
+
+# ── Deploy: write a rendered project into the user's workspace ───────────────
+@app.post("/api/deploy", response_model=DeployResult)
+def deploy(req: DeployRequest, request: Request) -> DeployResult:
+    ctx = user_workspace_client(request)
+    try:
+        result = write_project(ctx.client, ctx.email, req)
+    except ValueError as e:
+        # Bad input (invalid path / project name).
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # SDK / workspace errors
+        raise HTTPException(status_code=502, detail=f"workspace write failed: {e}")
+
+    # Auto-register so the agent shows up in the Library. Best-effort: a
+    # registry write failure must not fail the deploy itself.
+    try:
+        agent_name = req.initial_agent_name or req.project_name
+        already = any(a.name == agent_name for a in store.list())
+        if not already:
+            store.create(AgentCreate(name=agent_name, workspace=result.user))
+    except Exception:
+        pass
+
+    return result
 
 
 # ── Static frontend (Databricks App deployment) ─────────────────────────────

@@ -23,7 +23,8 @@ import {
   generateBezierPath,
   isNodeIntersectingRect,
 } from '../utils';
-import { buildBundleConfig, buildAgentOpsStacksConfig, downloadProjectZip, generateCICDWorkflow } from '../codegen/project';
+import { buildBundleConfig, buildAgentOpsStacksConfig, buildProjectFiles, downloadProjectZip, generateCICDWorkflow } from '../codegen/project';
+import { deployToWorkspace, DeployResult } from '../api/deploy';
 import { NodeView } from '../components/NodeView';
 import { GroupView, ResizeCorner } from '../components/GroupView';
 import { EdgeView } from '../components/EdgeView';
@@ -34,6 +35,7 @@ import {
   ContextMenu,
   CodeExportModal,
   ProjectSettingsModal,
+  DeployResultModal,
   DatabricksAuth,
 } from '../components/Controls';
 import { DATABRICKS_MODELS } from '../constants';
@@ -119,6 +121,10 @@ export function AgentEditor() {
   const [contextMenu, setContextMenu] = useState<CtxMenu | null>(null);
   const [showCodeExport, setShowCodeExport] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deployResult, setDeployResult] = useState<DeployResult | null>(null);
+  const [deployError, setDeployError] = useState<string | null>(null);
+  const [showDeployResult, setShowDeployResult] = useState(false);
   const [auth, setAuth] = useState<DatabricksAuth | null>(null);
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(DEFAULT_PROJECT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
@@ -672,6 +678,27 @@ export function AgentEditor() {
     }
   };
 
+  const handleDeploy = async () => {
+    setIsDeploying(true);
+    setDeployError(null);
+    setDeployResult(null);
+    try {
+      const { projectName, initialAgentName, files } =
+        buildProjectFiles(nodes, edges, agentName, auth?.host, projectSettings);
+      const result = await deployToWorkspace({
+        project_name: projectName,
+        initial_agent_name: initialAgentName,
+        files,
+      });
+      setDeployResult(result);
+    } catch (e) {
+      setDeployError(e instanceof Error ? e.message : 'Deploy failed.');
+    } finally {
+      setIsDeploying(false);
+      setShowDeployResult(true);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -687,6 +714,8 @@ export function AgentEditor() {
         onExportCode={() => setShowCodeExport(true)}
         onDownloadZip={handleDownloadZip}
         isDownloadingZip={isDownloadingZip}
+        onDeploy={handleDeploy}
+        isDeploying={isDeploying}
         onAgentNameChange={setAgentName}
         auth={auth}
         onConnect={setAuth}
@@ -876,6 +905,15 @@ export function AgentEditor() {
           settings={projectSettings}
           onUpdate={setProjectSettings}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* Deploy result modal */}
+      {showDeployResult && (
+        <DeployResultModal
+          result={deployResult}
+          error={deployError}
+          onClose={() => setShowDeployResult(false)}
         />
       )}
     </div>

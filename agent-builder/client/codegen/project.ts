@@ -468,20 +468,29 @@ const CICD_PATHS: Record<string, string> = {
   gitlab_ci:      '.gitlab-ci.yml',
 };
 
-export const downloadProjectZip = async (
+// buildProjectFiles: the single source of truth for the set of files a project
+// exports. Both the ZIP download and the deploy-to-workspace flow reuse this,
+// so the two never drift. Returns a { path: content } map plus derived metadata
+// the deploy flow needs (project name, initial agent name).
+export interface ProjectFiles {
+  projectName: string;
+  initialAgentName: string;
+  files: Record<string, string>;
+}
+
+export const buildProjectFiles = (
   nodes: AgentNodeData[],
   edges: EdgeData[],
   agentName: string,
   host?: string,
   settings?: ProjectSettings,
-): Promise<void> => {
+): ProjectFiles => {
   const full = buildBundleConfig(nodes, edges, agentName, host, settings);
   const stacksConfig = buildAgentOpsStacksConfig(nodes, edges, agentName, settings);
 
-  // Build manifest (full config minus cicd — that's a separate file)
+  // Manifest = full config minus cicd (that's a separate file).
   const { cicd: _cicd, ...manifest } = full;
 
-  // Render README
   const readme = Mustache.render(readmeTpl, {
     agentName,
     projectName: full.project_name,
@@ -494,24 +503,44 @@ export const downloadProjectZip = async (
     llmEndpoint: full.llm_model_name,
   });
 
-  // Build ZIP
-  const zip = new JSZip();
-  zip.file('config.json', JSON.stringify(stacksConfig, null, 2));
-  zip.file('agents_manifest.json', JSON.stringify(manifest, null, 2));
-  zip.file('README.md', readme);
+  const files: Record<string, string> = {
+    'config.json': JSON.stringify(stacksConfig, null, 2),
+    'agents_manifest.json': JSON.stringify(manifest, null, 2),
+    'README.md': readme,
+  };
 
-  // CI/CD workflow (optional)
   if (full.cicd.enabled) {
     const cicdYaml = generateCICDWorkflow(full);
     const cicdPath = CICD_PATHS[full.cicd.provider] ?? 'ci-cd.yml';
-    if (cicdYaml) zip.file(cicdPath, cicdYaml);
+    if (cicdYaml) files[cicdPath] = cicdYaml;
+  }
+
+  return {
+    projectName: full.project_name,
+    initialAgentName: stacksConfig.input_initial_agent_name,
+    files,
+  };
+};
+
+export const downloadProjectZip = async (
+  nodes: AgentNodeData[],
+  edges: EdgeData[],
+  agentName: string,
+  host?: string,
+  settings?: ProjectSettings,
+): Promise<void> => {
+  const { projectName, files } = buildProjectFiles(nodes, edges, agentName, host, settings);
+
+  const zip = new JSZip();
+  for (const [path, content] of Object.entries(files)) {
+    zip.file(path, content);
   }
 
   const blob = await zip.generateAsync({ type: 'blob' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `${full.project_name}.zip`;
+  a.download = `${projectName}.zip`;
   a.click();
   URL.revokeObjectURL(url);
 };

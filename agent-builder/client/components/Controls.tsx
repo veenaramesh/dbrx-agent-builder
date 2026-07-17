@@ -134,6 +134,8 @@ interface HeaderProps {
   onExportCode: () => void;
   onDownloadZip: () => void;
   isDownloadingZip: boolean;
+  onDeploy: () => void;
+  isDeploying: boolean;
   onAgentNameChange: (name: string) => void;
   auth: DatabricksAuth | null;
   onConnect: (auth: DatabricksAuth) => void;
@@ -152,6 +154,8 @@ export const Header: React.FC<HeaderProps> = ({
   onExportCode,
   onDownloadZip,
   isDownloadingZip,
+  onDeploy,
+  isDeploying,
   onAgentNameChange,
   auth,
   onConnect,
@@ -326,11 +330,22 @@ export const Header: React.FC<HeaderProps> = ({
       <button
         onClick={onDownloadZip}
         disabled={isDownloadingZip}
-        className="flex items-center gap-2 px-3 h-8 bg-[#FF3621] hover:bg-[#e02d1a] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors"
+        className="flex items-center gap-2 px-3 h-8 bg-[#243f49] hover:bg-[#2e5060] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors border border-[#34606f]"
         title="Download full DAB project as ZIP"
       >
         <Download size={14} />
         {isDownloadingZip ? 'Generating…' : 'Download DAB'}
+      </button>
+
+      {/* Deploy to Workspace */}
+      <button
+        onClick={onDeploy}
+        disabled={isDeploying}
+        className="flex items-center gap-2 px-3 h-8 bg-[#FF3621] hover:bg-[#e02d1a] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors"
+        title="Write the DAB into your Databricks workspace"
+      >
+        {isDeploying ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
+        {isDeploying ? 'Deploying…' : 'Deploy to Workspace'}
       </button>
 
       {showConnectModal && (
@@ -848,6 +863,78 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, nodeId, onDelete
         <Trash2 size={13} />
         Delete
       </button>
+    </div>
+  );
+};
+
+// ── Deploy Result Modal ───────────────────────────────────────────────────────
+
+interface DeployResultModalProps {
+  result: { workspace_path: string; user: string; commands: string[] } | null;
+  error: string | null;
+  onClose: () => void;
+}
+
+export const DeployResultModal: React.FC<DeployResultModalProps> = ({ result, error, onClose }) => {
+  const [copied, setCopied] = useState(false);
+  const cmds = result?.commands.join('\n') ?? '';
+
+  const copyCmds = () => {
+    navigator.clipboard.writeText(cmds).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100]" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-[560px] max-w-[92vw]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+          <h2 className="text-[14px] font-bold text-slate-800">
+            {error ? 'Deploy failed' : 'Deployed to workspace'}
+          </h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+        </div>
+
+        {error ? (
+          <div className="p-5">
+            <p className="text-[12px] text-red-600 leading-relaxed">{error}</p>
+            <p className="text-[11px] text-slate-400 mt-3">
+              If you're running locally, deploy needs the backend and a Databricks login.
+              Inside the App it writes to your workspace automatically.
+            </p>
+          </div>
+        ) : result && (
+          <div className="p-5 space-y-4">
+            <div>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Wrote files to</p>
+              <code className="block text-[12px] text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-mono break-all">
+                {result.workspace_path}
+              </code>
+              <p className="text-[10px] text-slate-400 mt-1">in {result.user}'s workspace</p>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Next steps — run from a workspace terminal</p>
+                <button onClick={copyCmds} className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-[#FF3621]">
+                  {copied ? <Check size={11} /> : <Copy size={11} />}{copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <pre className="text-[11px] text-slate-700 bg-slate-900 text-slate-100 rounded-lg px-3 py-2.5 font-mono overflow-x-auto whitespace-pre">
+{result.commands.join('\n')}
+              </pre>
+              <p className="text-[10px] text-slate-400 mt-2">
+                <code>bundle init</code> renders the agentops-stacks project from your <code>config.json</code>;
+                <code> bundle deploy</code> ships it to Databricks.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end px-5 py-3.5 border-t border-slate-100">
+          <button onClick={onClose} className="px-3 h-9 rounded-lg bg-[#1B3139] text-white text-[12px] font-semibold hover:bg-[#243f49]">Done</button>
+        </div>
+      </div>
     </div>
   );
 };
