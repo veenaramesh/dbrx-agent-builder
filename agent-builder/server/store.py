@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -21,7 +22,13 @@ from pathlib import Path
 
 from models import Agent, AgentCreate, AgentUpdate
 
-_DEFAULT_PATH = os.environ.get("AGENT_REGISTRY_PATH", "data/registry.json")
+# Default to a writable location. On a Databricks App the synced source dir is
+# read-only, so a relative path there would fail; /tmp is always writable.
+# Point AGENT_REGISTRY_PATH at a mounted UC volume for durability across
+# restarts (see docs/deploy-app.md).
+_DEFAULT_PATH = os.environ.get(
+    "AGENT_REGISTRY_PATH", os.path.join(tempfile.gettempdir(), "agent-builder", "registry.json")
+)
 
 
 def _now() -> str:
@@ -32,9 +39,9 @@ class RegistryStore:
     def __init__(self, path: str = _DEFAULT_PATH) -> None:
         self._path = Path(path)
         self._lock = threading.Lock()
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        if not self._path.exists():
-            self._write_all([])
+        # Do NOT write on init — that would crash at import time if the path is
+        # not yet writable. The parent dir is created lazily on first write;
+        # reads tolerate a missing file (see _read_all).
 
     # ── low-level file IO ────────────────────────────────────────────────
     def _read_all(self) -> list[dict]:
@@ -45,6 +52,8 @@ class RegistryStore:
             return []
 
     def _write_all(self, rows: list[dict]) -> None:
+        # create the parent dir lazily (init does not, so import never writes)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         # atomic write: temp file in same dir, then rename
         tmp = self._path.with_suffix(self._path.suffix + ".tmp")
         with tmp.open("w", encoding="utf-8") as f:

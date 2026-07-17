@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -70,10 +70,13 @@ def update_agent(agent_id: str, patch: AgentUpdate) -> Agent:
     return agent
 
 
-@app.delete("/api/agents/{agent_id}", status_code=204)
-def delete_agent(agent_id: str) -> None:
+@app.delete("/api/agents/{agent_id}", status_code=204, response_class=Response)
+def delete_agent(agent_id: str) -> Response:
     if not store.delete(agent_id):
         raise HTTPException(status_code=404, detail="agent not found")
+    # 204 must not carry a body; return an explicit empty Response so FastAPI
+    # doesn't try to JSON-encode None (which asserts on the 204 status).
+    return Response(status_code=204)
 
 
 # ── Static frontend (Databricks App deployment) ─────────────────────────────

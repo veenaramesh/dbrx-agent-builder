@@ -14,5 +14,8 @@
 command: ["python", "server/app.py"]
 
 env:
+  # Registry storage. Defaults to a writable temp dir (see server/store.py).
+  # TODO: point at a mounted UC volume for durability across restarts, e.g.
+  #   value: "/Volumes/<catalog>/<schema>/<volume>/agent-builder/registry.json"
   - name: AGENT_REGISTRY_PATH
-    value: "data/registry.json"  # TODO: point at a mounted UC volume for durability
+    value: "/tmp/agent-builder/registry.json"
