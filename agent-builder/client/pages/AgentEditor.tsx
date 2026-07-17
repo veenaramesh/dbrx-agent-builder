@@ -676,6 +676,7 @@ export function AgentEditor() {
       const result = await deployToWorkspace({
         project_name: projectName,
         initial_agent_name: initialAgentName,
+        display_name: agentName,
         files,
       });
       setDeployResult(result);

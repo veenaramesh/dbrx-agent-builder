@@ -134,7 +134,8 @@ def deploy(req: DeployRequest, request: Request) -> DeployResult:
     # Auto-register so the agent shows up in the Library. Best-effort: a
     # registry write failure must not fail the deploy itself.
     try:
-        agent_name = req.initial_agent_name or req.project_name
+        # Prefer the builder's human-facing name; fall back to agent/project id.
+        agent_name = req.display_name or req.initial_agent_name or req.project_name
         already = any(a.name == agent_name for a in store.list())
         if not already:
             store.create(AgentCreate(name=agent_name, workspace=result.user))

@@ -36,6 +36,7 @@ _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._@-]+$")
 class DeployRequest(BaseModel):
     project_name: str = Field(min_length=1)
     initial_agent_name: str = ""
+    display_name: str = ""   # human-facing name from the builder, used in the Library
     files: dict[str, str]
 
 

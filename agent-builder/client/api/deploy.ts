@@ -10,6 +10,7 @@ const url = (path: string) => `${API_BASE}${path}`;
 export interface DeployRequest {
   project_name: string;
   initial_agent_name: string;
+  display_name?: string;   // human-facing name from the builder (e.g. "Customer Support Agent")
   files: Record<string, string>;
 }
 
