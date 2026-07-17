@@ -671,12 +671,16 @@ export function AgentEditor() {
     setDeployError(null);
     setDeployResult(null);
     try {
-      const { projectName, initialAgentName, files } =
+      const { projectName, initialAgentName, files, agents } =
         buildProjectFiles(nodes, edges, agentName, undefined, projectSettings);
+      const initial = agents[0];
       const result = await deployToWorkspace({
         project_name: projectName,
         initial_agent_name: initialAgentName,
         display_name: agentName,
+        model: initial?.model,
+        endpoint: initial?.endpoint,
+        tools: initial?.tools,
         files,
       });
       setDeployResult(result);

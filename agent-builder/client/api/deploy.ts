@@ -7,10 +7,19 @@
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 const url = (path: string) => `${API_BASE}${path}`;
 
+export interface DeployToolRef {
+  kind: 'uc_function' | 'vector_search' | 'lakebase';
+  label: string;
+  detail: string;
+}
+
 export interface DeployRequest {
   project_name: string;
   initial_agent_name: string;
   display_name?: string;   // human-facing name from the builder (e.g. "Customer Support Agent")
+  model?: string;          // initial agent's LLM model, for the Library entry
+  endpoint?: string;       // initial agent's serving endpoint
+  tools?: DeployToolRef[]; // initial agent's tools/retrievers/lakebase
   files: Record<string, string>;
 }
 

@@ -134,11 +134,24 @@ def deploy(req: DeployRequest, request: Request) -> DeployResult:
     # Auto-register so the agent shows up in the Library. Best-effort: a
     # registry write failure must not fail the deploy itself.
     try:
+        from models import ToolRef
+
         # Prefer the builder's human-facing name; fall back to agent/project id.
         agent_name = req.display_name or req.initial_agent_name or req.project_name
-        already = any(a.name == agent_name for a in store.list())
-        if not already:
-            store.create(AgentCreate(name=agent_name, workspace=result.user))
+        tools = [ToolRef(kind=t.kind, label=t.label, detail=t.detail) for t in req.tools]
+        existing = next((a for a in store.list() if a.name == agent_name), None)
+        payload = AgentCreate(
+            name=agent_name,
+            workspace=result.user,
+            model=req.model,
+            endpoint=req.endpoint,
+            tools=tools,
+        )
+        if existing is None:
+            store.create(payload)
+        else:
+            # Re-deploy of the same agent: refresh its recorded components.
+            store.update(existing.id, AgentUpdate(**payload.model_dump()))
     except Exception:
         pass
 

@@ -472,10 +472,27 @@ const CICD_PATHS: Record<string, string> = {
 // exports. Both the ZIP download and the deploy-to-workspace flow reuse this,
 // so the two never drift. Returns a { path: content } map plus derived metadata
 // the deploy flow needs (project name, initial agent name).
+// Registry-shaped tool reference (matches the backend ToolRef / Library card).
+export interface RegistryToolRef {
+  kind: 'uc_function' | 'vector_search' | 'lakebase';
+  label: string;
+  detail: string;
+}
+
+// A flat, Library-facing summary of one agent's model + components.
+export interface AgentSummary {
+  name: string;
+  model: string;
+  endpoint: string;
+  tools: RegistryToolRef[];
+}
+
 export interface ProjectFiles {
   projectName: string;
   initialAgentName: string;
   files: Record<string, string>;
+  // Per-agent summary for Library registration (model, endpoint, tools).
+  agents: AgentSummary[];
 }
 
 export const buildProjectFiles = (
@@ -515,10 +532,34 @@ export const buildProjectFiles = (
     if (cicdYaml) files[cicdPath] = cicdYaml;
   }
 
+  const agents: AgentSummary[] = full.agents.map(a => ({
+    name: a.name,
+    model: a.model,
+    endpoint: a.endpoint_name,
+    tools: [
+      ...a.tools.map(t => ({
+        kind: 'uc_function' as const,
+        label: t.name,
+        detail: `${t.catalog}.${t.schema}`,
+      })),
+      ...a.retrievers.map(r => ({
+        kind: 'vector_search' as const,
+        label: r.name,
+        detail: r.index_name,
+      })),
+      ...a.lakebase_tools.map(l => ({
+        kind: 'lakebase' as const,
+        label: l.name,
+        detail: l.instance_name,
+      })),
+    ],
+  }));
+
   return {
     projectName: full.project_name,
     initialAgentName: stacksConfig.input_initial_agent_name,
     files,
+    agents,
   };
 };
 

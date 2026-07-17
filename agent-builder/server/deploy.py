@@ -33,10 +33,19 @@ _DEPLOY_ROOT = os.environ.get("AGENT_DEPLOY_ROOT")  # e.g. /Workspace/Shared/age
 _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._@-]+$")
 
 
+class DeployToolRef(BaseModel):
+    kind: str
+    label: str
+    detail: str = ""
+
+
 class DeployRequest(BaseModel):
     project_name: str = Field(min_length=1)
     initial_agent_name: str = ""
     display_name: str = ""   # human-facing name from the builder, used in the Library
+    model: str = ""          # initial agent's LLM model
+    endpoint: str = ""       # initial agent's serving endpoint
+    tools: list[DeployToolRef] = Field(default_factory=list)
     files: dict[str, str]
 
 
