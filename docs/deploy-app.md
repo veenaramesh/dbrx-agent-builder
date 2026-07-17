@@ -40,8 +40,12 @@ From the `agent-builder` directory (the App root — it contains `app.yaml`,
 # First time: create the app
 databricks apps create agent-brick-builder
 
-# Upload source + built client, then deploy
-databricks sync . /Workspace/Users/<you>/agent-brick-builder-src
+# Upload source + built client, then deploy.
+# NOTE: `databricks sync` honors .gitignore, which excludes client/dist. Pass
+# --include 'client/dist/**' so the built frontend actually uploads — without
+# it the App starts but serves no UI.
+databricks sync . /Workspace/Users/<you>/agent-brick-builder-src \
+  --include 'client/dist/**'
 databricks apps deploy agent-brick-builder \
   --source-code-path /Workspace/Users/<you>/agent-brick-builder-src
 ```
