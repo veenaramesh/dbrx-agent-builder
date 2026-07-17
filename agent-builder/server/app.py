@@ -20,10 +20,19 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from datetime import datetime, timezone
+
+from pydantic import BaseModel
+
 from auth import caller_email, service_principal_client
 from deploy import DeployRequest, DeployResult, write_project
-from models import Agent, AgentCreate, AgentUpdate
+from models import Agent, AgentCreate, AgentUpdate, Stage, next_stage
+from readiness import compute_readiness
 from store import RegistryStore
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 app = FastAPI(title="Agent Library API", version="0.1.0")
 
@@ -151,6 +160,64 @@ def delete_agent(agent_id: str) -> Response:
     # 204 must not carry a body; return an explicit empty Response so FastAPI
     # doesn't try to JSON-encode None (which asserts on the 204 status).
     return Response(status_code=204)
+
+
+# ── Readiness: verify, sign-off, promote ─────────────────────────────────────
+@app.post("/api/agents/{agent_id}/verify", response_model=Agent)
+def verify_agent(agent_id: str) -> Agent:
+    """Recompute the agent's promotion-readiness scorecard from live workspace
+    state (serving health + MLflow eval) and persist it."""
+    agent = store.get(agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="agent not found")
+    try:
+        w = service_principal_client()
+        readiness = compute_readiness(w, agent, _now())
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"verify failed: {type(e).__name__}: {e}")
+    updated = store.patch_raw(agent_id, {"readiness": readiness.model_dump()})
+    return updated or agent
+
+
+class SignOffRequest(BaseModel):
+    approved: bool = True
+
+
+@app.post("/api/agents/{agent_id}/signoff", response_model=Agent)
+def signoff_agent(agent_id: str, req: SignOffRequest, request: Request) -> Agent:
+    """Toggle a human promotion sign-off, attributed to the caller."""
+    agent = store.get(agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="agent not found")
+    if req.approved:
+        who = caller_email(request) or "unknown"
+        changes = {"signed_off_by": who, "signed_off_at": _now()}
+    else:
+        changes = {"signed_off_by": None, "signed_off_at": None}
+    return store.patch_raw(agent_id, changes) or agent
+
+
+@app.post("/api/agents/{agent_id}/promote", response_model=Agent)
+def promote_agent(agent_id: str) -> Agent:
+    """Advance the agent to the next stage. Requires the current readiness
+    verdict to be ready (verify first)."""
+    agent = store.get(agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="agent not found")
+    if agent.readiness is None or not agent.readiness.ready:
+        raise HTTPException(status_code=409, detail="agent is not ready to promote — run verify and satisfy all blocking checks")
+    nxt = next_stage(agent.stage)
+    if nxt is None:
+        raise HTTPException(status_code=409, detail="agent is already at the final stage (prod)")
+    # Advancing invalidates the prior sign-off and readiness (must re-verify for
+    # the new target stage).
+    updated = store.patch_raw(agent_id, {
+        "stage": nxt.value,
+        "signed_off_by": None,
+        "signed_off_at": None,
+        "readiness": None,
+    })
+    return updated or agent
 
 
 # ── Deploy: write a rendered project into a shared workspace path ────────────

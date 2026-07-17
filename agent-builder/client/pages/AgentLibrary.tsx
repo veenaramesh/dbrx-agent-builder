@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Cpu, Search, Wrench, Database, CircleDot, Plus, Trash2, Loader2, X } from 'lucide-react';
+import {
+  Cpu, Search, Wrench, Database, CircleDot, Plus, Trash2, Loader2, X,
+  Check, AlertTriangle, HelpCircle, UserCheck, RefreshCw, ArrowRight, ChevronDown, ChevronRight,
+} from 'lucide-react';
 import { NODE_COLORS } from '../constants';
 import {
   listAgents, createAgent, deleteAgent, backendAvailable,
-  RegistryAgent, AgentStatus, ToolRef, ToolKind, AgentInput,
+  verifyAgent, signOffAgent, promoteAgent,
+  RegistryAgent, ToolRef, ToolKind, AgentInput, Stage, CheckStatus,
 } from '../api/registry';
 
 // ── Agent Brick Builder logo (mirrors the editor header) ─────────────────────
@@ -22,65 +26,105 @@ const AgentBuilderLogo = ({ size = 22 }: { size?: number }) => (
 const nowIso = '2026-07-16T00:00:00Z';
 const SAMPLE_AGENTS: RegistryAgent[] = [
   {
-    id: 'sample-1', name: 'support_copilot', endpoint: 'support-copilot', app_url: '',
+    id: 'sample-1', name: 'support_copilot', endpoint: 'support-copilot', app_url: '', experiment: '',
     model: 'databricks-meta-llama-3-3-70b-instruct', workspace: 'field-eng.cloud.databricks.com',
-    registered_at: nowIso, updated_at: nowIso, status: 'ready', requests_24h: 4820,
+    stage: 'staging', registered_at: nowIso, updated_at: nowIso, status: 'ready', requests_24h: 4820,
+    signed_off_by: 'veena.ramesh@databricks.com', signed_off_at: nowIso,
     tools: [
       { kind: 'uc_function', label: 'search_knowledge_base', detail: 'main.tools' },
       { kind: 'uc_function', label: 'get_user_profile', detail: 'main.tools' },
       { kind: 'vector_search', label: 'Product Docs Index', detail: 'main.rag.product_docs_index' },
       { kind: 'lakebase', label: 'conversation_memory', detail: 'support-lakebase' },
     ],
+    readiness: {
+      verified_at: nowIso, target_stage: 'prod', ready: true,
+      checks: [
+        { key: 'deployment', label: 'Deployed & serving', status: 'pass', detail: "Endpoint 'support-copilot' is READY.", blocking: true },
+        { key: 'eval', label: 'Evaluation passing & fresh', status: 'pass', detail: 'Latest eval run passed gates (git a1b2c3d4).', blocking: true },
+        { key: 'usage', label: 'Real usage (traffic, errors, latency)', status: 'pass', detail: '4,820 req/24h, 0.4% errors, p95 820ms.', blocking: false },
+        { key: 'signoff', label: 'Human sign-off', status: 'pass', detail: 'Approved by veena.ramesh@databricks.com.', blocking: true },
+      ],
+    },
   },
   {
-    id: 'sample-2', name: 'sales_researcher', endpoint: 'sales-researcher', app_url: '',
+    id: 'sample-2', name: 'sales_researcher', endpoint: 'sales-researcher', app_url: '', experiment: '',
     model: 'databricks-claude-3-7-sonnet', workspace: 'field-eng.cloud.databricks.com',
-    registered_at: nowIso, updated_at: nowIso, status: 'ready', requests_24h: 1290,
+    stage: 'test', registered_at: nowIso, updated_at: nowIso, status: 'ready', requests_24h: 1290,
+    signed_off_by: null, signed_off_at: null,
     tools: [
       { kind: 'uc_function', label: 'search_knowledge_base', detail: 'main.tools' },
       { kind: 'vector_search', label: 'Account Notes Index', detail: 'main.rag.account_notes_index' },
     ],
+    readiness: {
+      verified_at: nowIso, target_stage: 'staging', ready: false,
+      checks: [
+        { key: 'deployment', label: 'Deployed & serving', status: 'pass', detail: "Endpoint 'sales-researcher' is READY.", blocking: true },
+        { key: 'eval', label: 'Evaluation passing & fresh', status: 'pass', detail: 'Latest eval run passed gates.', blocking: true },
+        { key: 'usage', label: 'Real usage (traffic, errors, latency)', status: 'warn', detail: '1,290 req/24h, p95 4.6s (near budget).', blocking: false },
+        { key: 'signoff', label: 'Human sign-off', status: 'manual', detail: "Awaiting a reviewer's approval to promote.", blocking: true },
+      ],
+    },
   },
   {
-    id: 'sample-3', name: 'sql_analyst', endpoint: 'sql-analyst', app_url: '',
+    id: 'sample-3', name: 'sql_analyst', endpoint: 'sql-analyst', app_url: '', experiment: '',
     model: 'databricks-meta-llama-3-1-405b-instruct', workspace: 'field-eng.cloud.databricks.com',
-    registered_at: nowIso, updated_at: nowIso, status: 'updating', requests_24h: 640,
+    stage: 'dev', registered_at: nowIso, updated_at: nowIso, status: 'failed', requests_24h: 0,
+    signed_off_by: null, signed_off_at: null,
     tools: [
       { kind: 'uc_function', label: 'run_sql_query', detail: 'main.analytics' },
       { kind: 'lakebase', label: 'orders_db', detail: 'analytics-lakebase' },
     ],
+    readiness: {
+      verified_at: nowIso, target_stage: 'test', ready: false,
+      checks: [
+        { key: 'deployment', label: 'Deployed & serving', status: 'pass', detail: "Endpoint 'sql-analyst' is READY.", blocking: true },
+        { key: 'eval', label: 'Evaluation passing & fresh', status: 'fail', detail: 'Latest eval run failed one or more block-tier gates.', blocking: true },
+        { key: 'usage', label: 'Real usage (traffic, errors, latency)', status: 'unknown', detail: 'No usage recorded yet.', blocking: false },
+        { key: 'signoff', label: 'Human sign-off', status: 'manual', detail: "Awaiting a reviewer's approval to promote.", blocking: true },
+      ],
+    },
   },
   {
-    id: 'sample-4', name: 'onboarding_bot', endpoint: 'onboarding-bot', app_url: '',
+    id: 'sample-4', name: 'onboarding_bot', endpoint: '', app_url: '', experiment: '',
     model: 'databricks-meta-llama-3-3-70b-instruct', workspace: 'field-eng.cloud.databricks.com',
-    registered_at: nowIso, updated_at: nowIso, status: 'failed', requests_24h: 0,
+    stage: 'dev', registered_at: nowIso, updated_at: nowIso, status: 'unknown', requests_24h: null,
+    signed_off_by: null, signed_off_at: null,
     tools: [{ kind: 'uc_function', label: 'create_ticket', detail: 'main.tools' }],
+    readiness: null,
   },
 ];
 
 // ── Presentational helpers ────────────────────────────────────────────────────
-const STATUS_META: Record<AgentStatus, { label: string; color: string; dot: string }> = {
-  unknown:  { label: 'Unknown',  color: '#475569', dot: '#94a3b8' },
-  ready:    { label: 'Ready',    color: '#166534', dot: '#22c55e' },
-  updating: { label: 'Updating', color: '#92400e', dot: '#f59e0b' },
-  failed:   { label: 'Failed',   color: '#991b1b', dot: '#ef4444' },
-};
-
 const TOOL_META: Record<ToolKind, { icon: React.ReactNode; color: string; label: string }> = {
   uc_function:   { icon: <Wrench size={11} />,  color: NODE_COLORS.uc_function.borderColor,   label: 'UC Function' },
   vector_search: { icon: <Search size={11} />,  color: NODE_COLORS.vector_search.borderColor, label: 'Vector Search' },
   lakebase:      { icon: <Database size={11} />, color: NODE_COLORS.lakebase.borderColor,      label: 'Lakebase' },
 };
 
-const StatusBadge = ({ status }: { status: AgentStatus }) => {
-  const m = STATUS_META[status];
+// Promotion lifecycle stages.
+const STAGE_META: Record<Stage, { label: string; color: string }> = {
+  dev:     { label: 'Dev',     color: '#64748b' },
+  test:    { label: 'Test',    color: '#0ea5e9' },
+  staging: { label: 'Staging', color: '#8b5cf6' },
+  prod:    { label: 'Prod',    color: '#16a34a' },
+};
+
+const StageBadge = ({ stage }: { stage: Stage }) => {
+  const m = STAGE_META[stage] ?? STAGE_META.dev;
   return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold"
-      style={{ backgroundColor: `${m.dot}1a`, color: m.color }}>
-      <CircleDot size={9} style={{ color: m.dot }} />
+    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide"
+      style={{ backgroundColor: `${m.color}18`, color: m.color }}>
       {m.label}
     </span>
   );
+};
+
+const CHECK_META: Record<CheckStatus, { icon: React.ReactNode; color: string }> = {
+  pass:    { icon: <Check size={12} />,          color: '#16a34a' },
+  warn:    { icon: <AlertTriangle size={12} />,  color: '#d97706' },
+  fail:    { icon: <X size={12} />,              color: '#dc2626' },
+  manual:  { icon: <UserCheck size={12} />,      color: '#8b5cf6' },
+  unknown: { icon: <HelpCircle size={12} />,     color: '#94a3b8' },
 };
 
 const ToolChip = ({ tool }: { tool: ToolRef }) => {
@@ -95,10 +139,98 @@ const ToolChip = ({ tool }: { tool: ToolRef }) => {
   );
 };
 
-const AgentCard = ({ agent, onDelete, canDelete }: {
-  agent: RegistryAgent; onDelete: (id: string) => void; canDelete: boolean;
+// Readiness scorecard shown inside a card.
+const ReadinessPanel = ({ agent, live, busy, onVerify, onSignoff, onPromote }: {
+  agent: RegistryAgent; live: boolean; busy: boolean;
+  onVerify: () => void; onSignoff: (approved: boolean) => void; onPromote: () => void;
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const r = agent.readiness;
+  const nextLabel = r?.target_stage ? STAGE_META[r.target_stage].label : null;
+
+  const verdict = !r
+    ? { text: 'Not verified', color: '#94a3b8', bg: '#f1f5f9' }
+    : r.ready
+      ? { text: nextLabel ? `Ready to promote to ${nextLabel}` : 'Ready', color: '#16a34a', bg: '#f0fdf4' }
+      : { text: nextLabel ? `Not ready for ${nextLabel}` : 'Not ready', color: '#b45309', bg: '#fffbeb' };
+
+  return (
+    <div className="px-4 py-3 border-t border-slate-100">
+      {/* Verdict row */}
+      <div className="flex items-center justify-between">
+        <button onClick={() => setExpanded(e => !e)} className="flex items-center gap-1.5 min-w-0">
+          {r && (expanded ? <ChevronDown size={13} className="text-slate-400" /> : <ChevronRight size={13} className="text-slate-400" />)}
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold"
+            style={{ backgroundColor: verdict.bg, color: verdict.color }}>
+            {r?.ready ? <Check size={11} /> : <CircleDot size={9} />}
+            {verdict.text}
+          </span>
+        </button>
+        {live && (
+          <button onClick={onVerify} disabled={busy}
+            className="flex items-center gap-1 text-[10px] font-medium text-slate-500 hover:text-[#FF3621] disabled:opacity-50"
+            title="Recompute readiness from live workspace state">
+            {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Verify
+          </button>
+        )}
+      </div>
+
+      {/* Expandable checklist */}
+      {expanded && r && (
+        <div className="mt-2.5 space-y-1.5">
+          {r.checks.map(c => {
+            const m = CHECK_META[c.status];
+            return (
+              <div key={c.key} className="flex items-start gap-2 text-[11px]">
+                <span className="flex-shrink-0 mt-[1px]" style={{ color: m.color }}>{m.icon}</span>
+                <div className="min-w-0">
+                  <span className="font-medium text-slate-700">{c.label}</span>
+                  {!c.blocking && <span className="ml-1 text-[9px] text-slate-400">(non-blocking)</span>}
+                  <p className="text-slate-400 leading-snug">{c.detail}</p>
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-[9px] text-slate-300 pt-0.5">verified {r.verified_at.slice(0, 16).replace('T', ' ')}</p>
+        </div>
+      )}
+
+      {/* Actions */}
+      {live && (
+        <div className="mt-3 flex items-center gap-2">
+          {agent.signed_off_by ? (
+            <button onClick={() => onSignoff(false)} disabled={busy}
+              className="flex items-center gap-1 px-2.5 h-7 rounded-md border border-slate-200 text-[10px] font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+              <UserCheck size={11} className="text-violet-500" /> Signed off · revoke
+            </button>
+          ) : (
+            <button onClick={() => onSignoff(true)} disabled={busy}
+              className="flex items-center gap-1 px-2.5 h-7 rounded-md border border-violet-200 text-[10px] font-medium text-violet-600 hover:bg-violet-50 disabled:opacity-50">
+              <UserCheck size={11} /> Sign off
+            </button>
+          )}
+          <button onClick={onPromote} disabled={busy || !r?.ready || !nextLabel}
+            className="flex items-center gap-1 px-2.5 h-7 rounded-md bg-[#FF3621] hover:bg-[#e02d1a] text-white text-[10px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            title={r?.ready ? `Promote to ${nextLabel}` : 'Satisfy all blocking checks first'}>
+            Promote{nextLabel ? ` → ${nextLabel}` : ''} <ArrowRight size={11} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AgentCard = ({ agent, live, canDelete, onDelete, onVerify, onSignoff, onPromote }: {
+  agent: RegistryAgent; live: boolean; canDelete: boolean;
+  onDelete: (id: string) => void;
+  onVerify: (id: string) => Promise<void>;
+  onSignoff: (id: string, approved: boolean) => Promise<void>;
+  onPromote: (id: string) => Promise<void>;
 }) => {
   const llm = NODE_COLORS.llm.borderColor;
+  const [busy, setBusy] = useState(false);
+  const wrap = (fn: () => Promise<void>) => async () => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col group">
       <div className="flex items-start gap-3 p-4 border-b border-slate-100">
@@ -108,7 +240,7 @@ const AgentCard = ({ agent, onDelete, canDelete }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-[14px] font-bold text-slate-800 truncate" title={agent.name}>{agent.name}</h3>
-            <StatusBadge status={agent.status} />
+            <StageBadge stage={agent.stage} />
           </div>
           <p className="text-[11px] text-slate-400 font-mono truncate" title={agent.model}>
             {agent.model ? agent.model.replace('databricks-', '') : '—'}
@@ -136,12 +268,12 @@ const AgentCard = ({ agent, onDelete, canDelete }: {
         )}
       </div>
 
-      <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-        <span title="Requests in the last 24h">
-          {agent.requests_24h != null ? `${agent.requests_24h.toLocaleString()} req / 24h` : 'traffic —'}
-        </span>
-        {agent.endpoint && <span className="text-slate-400 font-mono truncate max-w-[45%]" title={agent.endpoint}>{agent.endpoint}</span>}
-      </div>
+      <ReadinessPanel
+        agent={agent} live={live} busy={busy}
+        onVerify={wrap(() => onVerify(agent.id))}
+        onSignoff={(approved) => wrap(() => onSignoff(agent.id, approved))()}
+        onPromote={wrap(() => onPromote(agent.id))}
+      />
     </div>
   );
 };
@@ -214,7 +346,7 @@ export const AgentLibrary: React.FC = () => {
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | AgentStatus>('all');
+  const [stageFilter, setStageFilter] = useState<'all' | Stage>('all');
   const [showAdd, setShowAdd] = useState(false);
 
   const load = async () => {
@@ -242,10 +374,20 @@ export const AgentLibrary: React.FC = () => {
     setAgents(prev => prev.filter(a => a.id !== id));
   };
 
+  const replace = (updated: RegistryAgent) =>
+    setAgents(prev => prev.map(a => (a.id === updated.id ? updated : a)));
+
+  const handleVerify = async (id: string) => { replace(await verifyAgent(id)); };
+  const handleSignoff = async (id: string, approved: boolean) => { replace(await signOffAgent(id, approved)); };
+  const handlePromote = async (id: string) => {
+    try { replace(await promoteAgent(id)); }
+    catch (e) { alert(e instanceof Error ? e.message : 'Promote failed'); }
+  };
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return agents.filter(a => {
-      if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+      if (stageFilter !== 'all' && a.stage !== stageFilter) return false;
       if (!q) return true;
       return (
         a.name.toLowerCase().includes(q) ||
@@ -253,7 +395,7 @@ export const AgentLibrary: React.FC = () => {
         a.tools.some(t => t.label.toLowerCase().includes(q))
       );
     });
-  }, [agents, query, statusFilter]);
+  }, [agents, query, stageFilter]);
 
   const totalTools = agents.reduce((n, a) => n + a.tools.length, 0);
   const workspace = agents.find(a => a.workspace)?.workspace ?? (live ? 'connected' : 'not connected');
@@ -313,10 +455,10 @@ export const AgentLibrary: React.FC = () => {
                 className="w-full pl-9 pr-3 h-9 rounded-lg border border-slate-200 bg-white text-[12px] text-slate-700 outline-none focus:border-[#FF3621]" />
             </div>
             <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
-              {(['all', 'ready', 'updating', 'failed'] as const).map(s => (
-                <button key={s} onClick={() => setStatusFilter(s)}
+              {(['all', 'dev', 'test', 'staging', 'prod'] as const).map(s => (
+                <button key={s} onClick={() => setStageFilter(s)}
                   className={`px-3 h-8 rounded-md text-[11px] font-medium capitalize transition-all ${
-                    statusFilter === s ? 'bg-[#1B3139] text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+                    stageFilter === s ? 'bg-[#1B3139] text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
                   {s}
                 </button>
               ))}
@@ -337,7 +479,11 @@ export const AgentLibrary: React.FC = () => {
             </div>
           ) : filtered.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map(a => <AgentCard key={a.id} agent={a} onDelete={handleDelete} canDelete={live} />)}
+              {filtered.map(a => (
+                <AgentCard key={a.id} agent={a} live={live} canDelete={live}
+                  onDelete={handleDelete} onVerify={handleVerify}
+                  onSignoff={handleSignoff} onPromote={handlePromote} />
+              ))}
             </div>
           ) : (
             <div className="text-center py-20 text-slate-400 text-[13px]">

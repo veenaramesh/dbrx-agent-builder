@@ -27,6 +27,47 @@ class AgentStatus(str, Enum):
     failed = "failed"
 
 
+# Promotion lifecycle. The builder lives in dev; readiness = "cleared the bar to
+# advance to the next stage".
+class Stage(str, Enum):
+    dev = "dev"
+    test = "test"
+    staging = "staging"
+    prod = "prod"
+
+
+STAGE_ORDER = [Stage.dev, Stage.test, Stage.staging, Stage.prod]
+
+
+def next_stage(stage: Stage) -> Stage | None:
+    i = STAGE_ORDER.index(stage)
+    return STAGE_ORDER[i + 1] if i + 1 < len(STAGE_ORDER) else None
+
+
+class CheckStatus(str, Enum):
+    pass_ = "pass"
+    warn = "warn"
+    fail = "fail"
+    manual = "manual"     # requires a human action (e.g. sign-off)
+    unknown = "unknown"   # couldn't be determined (no data / not deployed)
+
+
+class ReadinessCheck(BaseModel):
+    key: str                          # e.g. "deployment", "eval", "usage"
+    label: str
+    status: CheckStatus
+    detail: str = ""                  # human-readable explanation
+    blocking: bool = True             # does a non-pass block promotion?
+
+
+class Readiness(BaseModel):
+    """Computed scorecard for promoting to the next stage."""
+    verified_at: str                  # ISO-8601
+    target_stage: Optional[str] = None  # the stage this readiness is *for* advancing to
+    ready: bool = False               # all blocking checks pass (or manually signed off)
+    checks: list[ReadinessCheck] = Field(default_factory=list)
+
+
 class ToolRef(BaseModel):
     """One component an agent uses, mirrored from the manifest."""
     kind: ToolKind
@@ -38,8 +79,10 @@ class AgentBase(BaseModel):
     name: str
     endpoint: str = ""               # serving endpoint name (for live verify)
     app_url: str = ""                # Databricks App URL, if deployed as an App
+    experiment: str = ""             # MLflow experiment path/id (for eval reads)
     model: str = ""
     workspace: str = ""
+    stage: Stage = Stage.dev
     tools: list[ToolRef] = Field(default_factory=list)
 
 
@@ -53,8 +96,10 @@ class AgentUpdate(BaseModel):
     name: Optional[str] = None
     endpoint: Optional[str] = None
     app_url: Optional[str] = None
+    experiment: Optional[str] = None
     model: Optional[str] = None
     workspace: Optional[str] = None
+    stage: Optional[Stage] = None
     tools: Optional[list[ToolRef]] = None
 
 
@@ -64,4 +109,9 @@ class Agent(AgentBase):
     registered_at: str               # ISO-8601
     updated_at: str                  # ISO-8601
     status: AgentStatus = AgentStatus.unknown
-    requests_24h: Optional[int] = None   # filled by live verify (Phase 3)
+    requests_24h: Optional[int] = None       # filled by live verify
+    # Promotion sign-off (manual gate)
+    signed_off_by: Optional[str] = None
+    signed_off_at: Optional[str] = None
+    # Last computed readiness scorecard
+    readiness: Optional[Readiness] = None

@@ -7,6 +7,8 @@
 
 export type ToolKind = 'uc_function' | 'vector_search' | 'lakebase';
 export type AgentStatus = 'unknown' | 'ready' | 'updating' | 'failed';
+export type Stage = 'dev' | 'test' | 'staging' | 'prod';
+export type CheckStatus = 'pass' | 'warn' | 'fail' | 'manual' | 'unknown';
 
 export interface ToolRef {
   kind: ToolKind;
@@ -14,18 +16,38 @@ export interface ToolRef {
   detail: string;
 }
 
+export interface ReadinessCheck {
+  key: string;
+  label: string;
+  status: CheckStatus;
+  detail: string;
+  blocking: boolean;
+}
+
+export interface Readiness {
+  verified_at: string;
+  target_stage: Stage | null;
+  ready: boolean;
+  checks: ReadinessCheck[];
+}
+
 export interface RegistryAgent {
   id: string;
   name: string;
   endpoint: string;
   app_url: string;
+  experiment: string;
   model: string;
   workspace: string;
+  stage: Stage;
   tools: ToolRef[];
   registered_at: string;
   updated_at: string;
   status: AgentStatus;
   requests_24h: number | null;
+  signed_off_by: string | null;
+  signed_off_at: string | null;
+  readiness: Readiness | null;
 }
 
 export interface AgentInput {
@@ -73,6 +95,27 @@ export async function updateAgent(id: string, patch: Partial<AgentInput>): Promi
 
 export async function deleteAgent(id: string): Promise<void> {
   await json<void>(await fetch(url(`/api/agents/${id}`), { method: 'DELETE' }));
+}
+
+// Recompute the readiness scorecard from live workspace state.
+export async function verifyAgent(id: string): Promise<RegistryAgent> {
+  return json<RegistryAgent>(await fetch(url(`/api/agents/${id}/verify`), { method: 'POST' }));
+}
+
+// Toggle the human promotion sign-off.
+export async function signOffAgent(id: string, approved: boolean): Promise<RegistryAgent> {
+  return json<RegistryAgent>(
+    await fetch(url(`/api/agents/${id}/signoff`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved }),
+    }),
+  );
+}
+
+// Advance to the next stage (requires a ready verdict; 409 otherwise).
+export async function promoteAgent(id: string): Promise<RegistryAgent> {
+  return json<RegistryAgent>(await fetch(url(`/api/agents/${id}/promote`), { method: 'POST' }));
 }
 
 // Quick reachability probe so the UI can decide between live vs sample data.

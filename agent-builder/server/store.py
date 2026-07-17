@@ -97,6 +97,20 @@ class RegistryStore:
                     return Agent(**row)
             return None
 
+    def patch_raw(self, agent_id: str, changes: dict) -> Agent | None:
+        """Merge server-computed fields (readiness, sign-off, status, traffic)
+        that aren't part of the user-facing AgentUpdate schema."""
+        with self._lock:
+            rows = self._read_all()
+            for i, row in enumerate(rows):
+                if row.get("id") == agent_id:
+                    row.update(changes)
+                    row["updated_at"] = _now()
+                    rows[i] = row
+                    self._write_all(rows)
+                    return Agent(**row)
+            return None
+
     def delete(self, agent_id: str) -> bool:
         with self._lock:
             rows = self._read_all()
