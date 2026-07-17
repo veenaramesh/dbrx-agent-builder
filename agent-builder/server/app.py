@@ -77,8 +77,41 @@ def delete_agent(agent_id: str) -> None:
 
 
 # ── Static frontend (Databricks App deployment) ─────────────────────────────
-# If a built client is present, serve it at the root. Harmless in local dev
-# (the dist dir usually won't exist there since Vite serves the UI itself).
+# If a built client is present, serve it. Harmless in local dev (the dist dir
+# usually won't exist there since Vite serves the UI itself).
+#
+# The client is a single-page app with client-side routing (/, /library). We
+# serve hashed build assets from /assets and fall back to index.html for any
+# other non-/api path, so deep links and hard refreshes work.
 _DIST = Path(__file__).resolve().parent.parent / "client" / "dist"
 if _DIST.is_dir():
-    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="frontend")
+    from fastapi import Request
+    from fastapi.responses import FileResponse
+
+    _ASSETS = _DIST / "assets"
+    if _ASSETS.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_ASSETS)), name="assets")
+
+    _INDEX = _DIST / "index.html"
+
+    @app.get("/{full_path:path}")
+    def spa_fallback(full_path: str, request: Request):
+        # /api is handled by the routes above; never mask it with the SPA.
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="not found")
+        # Serve a real static file if one exists (favicon, etc.); else the SPA.
+        candidate = _DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(str(candidate))
+        return FileResponse(str(_INDEX))
+
+
+# ── Entrypoint ──────────────────────────────────────────────────────────────
+# Databricks Apps inject the port to bind via DATABRICKS_APP_PORT and expect
+# the process to listen on 0.0.0.0. Locally this defaults to 8001 (matching the
+# client's VITE_API_URL).
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("DATABRICKS_APP_PORT", os.environ.get("PORT", "8001")))
+    uvicorn.run(app, host="0.0.0.0", port=port)

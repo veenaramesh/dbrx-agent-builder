@@ -1,0 +1,6 @@
+# Python dependencies for the Agent Brick Builder Databricks App.
+# The Databricks Apps runtime installs this file from the app root.
+# Kept in sync with server/requirements.txt.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
