@@ -46,6 +46,42 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/api/whoami")
+def whoami(request: Request) -> dict:
+    """Diagnostic: report which auth-related request headers the App forwards,
+    without leaking secrets. Used to confirm on-behalf-of-user token delivery.
+    """
+    interesting = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower().startswith("x-forwarded") or k.lower() in ("authorization",)
+    }
+    # Redact values; only report presence + length so we never log a token.
+    header_report = {k: f"present(len={len(v)})" for k, v in interesting.items()}
+
+    # Decode ONLY the scope claim from the forwarded JWT (scope names are not
+    # secret; we never return the token itself). This tells us definitively
+    # which scopes the browser-minted user token carries.
+    scopes = None
+    tok = request.headers.get("x-forwarded-access-token")
+    if tok and tok.count(".") == 2:
+        import base64
+        import json as _json
+        try:
+            payload_b64 = tok.split(".")[1]
+            payload_b64 += "=" * (-len(payload_b64) % 4)  # pad
+            claims = _json.loads(base64.urlsafe_b64decode(payload_b64))
+            scopes = claims.get("scope")
+        except Exception:
+            scopes = "unable-to-decode"
+
+    return {
+        "forwarded_headers": header_report,
+        "has_user_token": "x-forwarded-access-token" in {k.lower() for k in request.headers},
+        "token_scopes": scopes,
+    }
+
+
 @app.get("/api/agents", response_model=list[Agent])
 def list_agents() -> list[Agent]:
     return store.list()
