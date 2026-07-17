@@ -23,4 +23,14 @@ fi
 
 VITE_BASE=/ npm run build
 
+# Guard: the App serves assets from the root. If index.html references a
+# subpath (e.g. a stray `npm run build` baked in the GitHub Pages base), the
+# App would fetch assets that 404 -> SPA fallback returns HTML -> white page.
+if grep -qE 'src="/[^"/][^"]*/assets/' "$CLIENT_DIR/dist/index.html"; then
+  echo "ERROR: dist/index.html assets are under a subpath, not /assets — wrong base." >&2
+  echo "       Always build via this script (VITE_BASE=/), not bare 'npm run build'." >&2
+  grep -oE 'src="[^"]+\.js"' "$CLIENT_DIR/dist/index.html" >&2
+  exit 1
+fi
+
 echo "==> Done. Built to: $CLIENT_DIR/dist"
