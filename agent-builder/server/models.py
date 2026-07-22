@@ -92,6 +92,8 @@ class AgentBase(BaseModel):
     endpoint: str = ""               # serving endpoint name (for live verify)
     app_url: str = ""                # Databricks App URL, if deployed as an App
     experiment: str = ""             # explicit MLflow experiment override (else derived)
+    experiment_id: str = ""          # resolved MLflow experiment id (for a link); set on verify
+    bundle_path: str = ""            # workspace folder the deployed DAB lives in
     model: str = ""
     workspace: str = ""
     stage: Stage = Stage.dev
@@ -110,6 +112,8 @@ class AgentUpdate(BaseModel):
     endpoint: Optional[str] = None
     app_url: Optional[str] = None
     experiment: Optional[str] = None
+    experiment_id: Optional[str] = None
+    bundle_path: Optional[str] = None
     model: Optional[str] = None
     workspace: Optional[str] = None
     stage: Optional[Stage] = None

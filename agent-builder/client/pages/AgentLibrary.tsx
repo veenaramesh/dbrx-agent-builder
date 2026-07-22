@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom';
 import {
   Cpu, Search, Wrench, Database, CircleDot, Plus, Trash2, Loader2, X,
   Check, AlertTriangle, HelpCircle, UserCheck, RefreshCw, ArrowRight, ChevronDown, ChevronRight,
+  ExternalLink, Pencil, FolderGit2, FlaskConical, Server, AppWindow, User,
 } from 'lucide-react';
 import { NODE_COLORS } from '../constants';
 import {
-  listAgents, createAgent, deleteAgent, backendAvailable,
+  listAgents, createAgent, deleteAgent, backendAvailable, getConfig, updateAgent,
   verifyAgent, signOffAgent, promoteAgent,
   RegistryAgent, ToolRef, ToolKind, AgentInput, Stage, CheckStatus,
 } from '../api/registry';
@@ -26,7 +27,7 @@ const AgentBuilderLogo = ({ size = 22 }: { size?: number }) => (
 const nowIso = '2026-07-16T00:00:00Z';
 const SAMPLE_AGENTS: RegistryAgent[] = [
   {
-    id: 'sample-1', name: 'support_copilot', project: 'support_copilot', endpoint: 'support-copilot', app_url: '', experiment: '',
+    id: 'sample-1', name: 'support_copilot', project: 'support_copilot', endpoint: 'support-copilot', app_url: '', experiment: '', experiment_id: '', bundle_path: '',
     model: 'databricks-meta-llama-3-3-70b-instruct', workspace: 'field-eng.cloud.databricks.com',
     stage: 'staging', registered_at: nowIso, updated_at: nowIso, status: 'ready', requests_24h: 4820,
     signed_off_by: 'veena.ramesh@databricks.com', signed_off_at: nowIso,
@@ -47,7 +48,7 @@ const SAMPLE_AGENTS: RegistryAgent[] = [
     },
   },
   {
-    id: 'sample-2', name: 'sales_researcher', project: 'sales_researcher', endpoint: 'sales-researcher', app_url: '', experiment: '',
+    id: 'sample-2', name: 'sales_researcher', project: 'sales_researcher', endpoint: 'sales-researcher', app_url: '', experiment: '', experiment_id: '', bundle_path: '',
     model: 'databricks-claude-3-7-sonnet', workspace: 'field-eng.cloud.databricks.com',
     stage: 'test', registered_at: nowIso, updated_at: nowIso, status: 'ready', requests_24h: 1290,
     signed_off_by: null, signed_off_at: null,
@@ -66,7 +67,7 @@ const SAMPLE_AGENTS: RegistryAgent[] = [
     },
   },
   {
-    id: 'sample-3', name: 'sql_analyst', project: 'sql_analyst', endpoint: 'sql-analyst', app_url: '', experiment: '',
+    id: 'sample-3', name: 'sql_analyst', project: 'sql_analyst', endpoint: 'sql-analyst', app_url: '', experiment: '', experiment_id: '', bundle_path: '',
     model: 'databricks-meta-llama-3-1-405b-instruct', workspace: 'field-eng.cloud.databricks.com',
     stage: 'dev', registered_at: nowIso, updated_at: nowIso, status: 'failed', requests_24h: 0,
     signed_off_by: null, signed_off_at: null,
@@ -85,7 +86,7 @@ const SAMPLE_AGENTS: RegistryAgent[] = [
     },
   },
   {
-    id: 'sample-4', name: 'onboarding_bot', project: 'onboarding_bot', endpoint: '', app_url: '', experiment: '',
+    id: 'sample-4', name: 'onboarding_bot', project: 'onboarding_bot', endpoint: '', app_url: '', experiment: '', experiment_id: '', bundle_path: '',
     model: 'databricks-meta-llama-3-3-70b-instruct', workspace: 'field-eng.cloud.databricks.com',
     stage: 'dev', registered_at: nowIso, updated_at: nowIso, status: 'unknown', requests_24h: null,
     signed_off_by: null, signed_off_at: null,
@@ -135,6 +136,133 @@ const ToolChip = ({ tool }: { tool: ToolRef }) => {
       title={`${m.label} · ${tool.detail}`}>
       {m.icon}
       <span className="font-medium">{tool.label}</span>
+    </div>
+  );
+};
+
+// ── Workspace deep links ──────────────────────────────────────────────────────
+// Build clickable URLs into the workspace from the host reported by /api/config.
+// Return '' when we can't form a link (no host / missing value), so callers can
+// fall back to plain text.
+const workspaceFolderUrl = (host: string, path: string) =>
+  host && path ? `${host}/#workspace${path}` : '';
+const experimentUrl = (host: string, expId: string) =>
+  host && expId ? `${host}/ml/experiments/${expId}` : '';
+const endpointUrl = (host: string, name: string) =>
+  host && name ? `${host}/ml/endpoints/${name}` : '';
+
+// The experiment path shown when no explicit override is set (matches the
+// backend's experiment_for(): /Shared/<project>_<stage>).
+const derivedExperimentPath = (agent: RegistryAgent) =>
+  agent.project ? `/Shared/${agent.project}_${agent.stage}` : '';
+
+// ── Detail row: a labelled value, optionally a link and/or inline-editable ────
+const DetailRow = ({ icon, label, value, href, placeholder, muted, onSave }: {
+  icon: React.ReactNode; label: string; value: string;
+  href?: string; placeholder?: string; muted?: boolean;
+  onSave?: (next: string) => Promise<void>;
+}) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+
+  const begin = () => { setDraft(value); setEditing(true); };
+  const commit = async () => {
+    if (draft === value) { setEditing(false); return; }
+    setSaving(true);
+    try { await onSave!(draft.trim()); setEditing(false); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="flex items-start gap-2 text-[11px] py-1">
+      <span className="flex-shrink-0 mt-[2px] text-slate-400">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">{label}</div>
+        {editing ? (
+          <div className="flex items-center gap-1 mt-0.5">
+            <input
+              autoFocus value={draft} onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+              placeholder={placeholder}
+              className="flex-1 px-1.5 h-6 rounded border border-slate-300 bg-white text-[11px] font-mono text-slate-700 outline-none focus:border-[#FF3621]"
+            />
+            <button onClick={commit} disabled={saving}
+              className="text-slate-400 hover:text-emerald-600 disabled:opacity-50">
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={13} />}
+            </button>
+            <button onClick={() => setEditing(false)} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 mt-0.5 group/row">
+            {value ? (
+              href ? (
+                <a href={href} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-mono text-[11px] text-[#1b6fb8] hover:underline truncate">
+                  <span className="truncate">{value}</span>
+                  <ExternalLink size={10} className="flex-shrink-0" />
+                </a>
+              ) : (
+                <span className={`font-mono text-[11px] truncate ${muted ? 'text-slate-400 italic' : 'text-slate-600'}`}>{value}</span>
+              )
+            ) : (
+              <span className="text-[11px] text-slate-300 italic">{placeholder ?? 'not set'}</span>
+            )}
+            {onSave && (
+              <button onClick={begin}
+                className="opacity-0 group-hover/row:opacity-100 text-slate-300 hover:text-[#FF3621] transition-opacity flex-shrink-0"
+                title={`Edit ${label.toLowerCase()}`}>
+                <Pencil size={11} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Expandable details: workspace links + editable bundle/experiment ──────────
+const AgentDetails = ({ agent, host, onUpdate }: {
+  agent: RegistryAgent; host: string;
+  onUpdate: (id: string, patch: Partial<AgentInput>) => Promise<void>;
+}) => {
+  // Experiment: prefer the explicit override, else show the derived path.
+  const expDisplay = agent.experiment || derivedExperimentPath(agent);
+  const expIsDerived = !agent.experiment && !!expDisplay;
+
+  return (
+    <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 space-y-0.5">
+      <DetailRow
+        icon={<FolderGit2 size={13} />} label="Bundle (workspace folder)"
+        value={agent.bundle_path} placeholder="/Workspace/Users/…/<project>"
+        href={workspaceFolderUrl(host, agent.bundle_path)}
+        onSave={next => onUpdate(agent.id, { bundle_path: next })}
+      />
+      <DetailRow
+        icon={<FlaskConical size={13} />}
+        label={`MLflow experiment${expIsDerived ? ' (derived)' : ''}`}
+        value={expDisplay} placeholder="/Shared/<project>_<stage>"
+        href={experimentUrl(host, agent.experiment_id)}
+        muted={expIsDerived}
+        onSave={next => onUpdate(agent.id, { experiment: next })}
+      />
+      <DetailRow
+        icon={<Server size={13} />} label="Serving endpoint"
+        value={agent.endpoint} placeholder="none"
+        href={endpointUrl(host, agent.endpoint)}
+        onSave={next => onUpdate(agent.id, { endpoint: next })}
+      />
+      {(agent.app_url || host) && (
+        <DetailRow
+          icon={<AppWindow size={13} />} label="App URL"
+          value={agent.app_url} placeholder="none"
+          href={agent.app_url}
+          onSave={next => onUpdate(agent.id, { app_url: next })}
+        />
+      )}
+      <DetailRow icon={<User size={13} />} label="Owner / workspace"
+        value={agent.workspace} muted />
     </div>
   );
 };
@@ -220,15 +348,17 @@ const ReadinessPanel = ({ agent, live, busy, onVerify, onSignoff, onPromote }: {
   );
 };
 
-const AgentCard = ({ agent, live, canDelete, onDelete, onVerify, onSignoff, onPromote }: {
-  agent: RegistryAgent; live: boolean; canDelete: boolean;
+const AgentCard = ({ agent, live, host, canDelete, onDelete, onVerify, onSignoff, onPromote, onUpdate }: {
+  agent: RegistryAgent; live: boolean; host: string; canDelete: boolean;
   onDelete: (id: string) => void;
   onVerify: (id: string) => Promise<void>;
   onSignoff: (id: string, approved: boolean) => Promise<void>;
   onPromote: (id: string) => Promise<void>;
+  onUpdate: (id: string, patch: Partial<AgentInput>) => Promise<void>;
 }) => {
   const llm = NODE_COLORS.llm.borderColor;
   const [busy, setBusy] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const wrap = (fn: () => Promise<void>) => async () => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
 
   return (
@@ -267,6 +397,14 @@ const AgentCard = ({ agent, live, canDelete, onDelete, onVerify, onSignoff, onPr
           <p className="text-[11px] text-slate-400 italic">No tools recorded</p>
         )}
       </div>
+
+      {/* Details toggle: workspace links + editable bundle/experiment */}
+      <button onClick={() => setShowDetails(s => !s)}
+        className="flex items-center gap-1.5 px-4 py-2 border-t border-slate-100 text-[10px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors">
+        {showDetails ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        Details &amp; links
+      </button>
+      {showDetails && <AgentDetails agent={agent} host={host} onUpdate={onUpdate} />}
 
       <ReadinessPanel
         agent={agent} live={live} busy={busy}
@@ -344,6 +482,7 @@ const AddAgentModal = ({ onAdd, onClose }: {
 export const AgentLibrary: React.FC = () => {
   const [agents, setAgents] = useState<RegistryAgent[]>([]);
   const [live, setLive] = useState(false);
+  const [host, setHost] = useState('');
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<'all' | Stage>('all');
@@ -354,8 +493,11 @@ export const AgentLibrary: React.FC = () => {
     const available = await backendAvailable();
     setLive(available);
     if (available) {
-      try { setAgents(await listAgents()); }
-      catch { setAgents([]); }
+      try {
+        const [list, cfg] = await Promise.all([listAgents(), getConfig()]);
+        setAgents(list);
+        setHost(cfg.host);
+      } catch { setAgents([]); }
     } else {
       setAgents(SAMPLE_AGENTS);
     }
@@ -378,6 +520,7 @@ export const AgentLibrary: React.FC = () => {
     setAgents(prev => prev.map(a => (a.id === updated.id ? updated : a)));
 
   const handleVerify = async (id: string) => { replace(await verifyAgent(id)); };
+  const handleUpdate = async (id: string, patch: Partial<AgentInput>) => { replace(await updateAgent(id, patch)); };
   const handleSignoff = async (id: string, approved: boolean) => { replace(await signOffAgent(id, approved)); };
   const handlePromote = async (id: string) => {
     try { replace(await promoteAgent(id)); }
@@ -480,9 +623,9 @@ export const AgentLibrary: React.FC = () => {
           ) : filtered.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map(a => (
-                <AgentCard key={a.id} agent={a} live={live} canDelete={live}
+                <AgentCard key={a.id} agent={a} live={live} host={host} canDelete={live}
                   onDelete={handleDelete} onVerify={handleVerify}
-                  onSignoff={handleSignoff} onPromote={handlePromote} />
+                  onSignoff={handleSignoff} onPromote={handlePromote} onUpdate={handleUpdate} />
               ))}
             </div>
           ) : (

@@ -88,6 +88,23 @@ def _find_experiment(w, agent: Agent):
         return None
 
 
+def _experiment_id(exp) -> str | None:
+    """Pull the experiment_id off an MLflow experiment lookup result, which may
+    be the experiment itself or a wrapper carrying `.experiment`."""
+    if exp is None:
+        return None
+    return (
+        getattr(getattr(exp, "experiment", exp), "experiment_id", None)
+        or getattr(exp, "experiment_id", None)
+    )
+
+
+def resolve_experiment_id(w, agent: Agent) -> str | None:
+    """Best-effort resolve the agent's MLflow experiment id, for building a
+    workspace link. Returns None when the experiment can't be found."""
+    return _experiment_id(_find_experiment(w, agent))
+
+
 def _eval_check(w, agent: Agent) -> ReadinessCheck:
     path = _experiment_path(agent)
     exp = _find_experiment(w, agent)
@@ -101,7 +118,7 @@ def _eval_check(w, agent: Agent) -> ReadinessCheck:
             key="eval", label="Evaluation passing & fresh",
             status=CheckStatus.unknown, blocking=True, detail=detail,
         )
-    exp_id = getattr(getattr(exp, "experiment", exp), "experiment_id", None) or getattr(exp, "experiment_id", None)
+    exp_id = _experiment_id(exp)
     try:
         runs = list(w.experiments.search_runs(
             experiment_ids=[exp_id],

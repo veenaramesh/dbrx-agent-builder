@@ -27,7 +27,7 @@ from pydantic import BaseModel
 from auth import caller_email, service_principal_client
 from deploy import DeployRequest, DeployResult, write_project
 from models import Agent, AgentCreate, AgentUpdate, Stage, next_stage
-from readiness import compute_readiness
+from readiness import compute_readiness, resolve_experiment_id
 from store import RegistryStore
 
 
@@ -53,6 +53,17 @@ store = RegistryStore()
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/api/config")
+def config() -> dict:
+    """Workspace context the client needs to build deep links (workspace folder,
+    MLflow experiment, serving endpoint). `host` is the workspace base URL, e.g.
+    https://<workspace>.cloud.databricks.com — empty when unknown (local dev)."""
+    host = os.environ.get("DATABRICKS_HOST", "")
+    if host and not host.startswith("http"):
+        host = f"https://{host}"
+    return {"host": host.rstrip("/")}
 
 
 @app.get("/api/whoami")
@@ -175,7 +186,16 @@ def verify_agent(agent_id: str) -> Agent:
         readiness = compute_readiness(w, agent, _now())
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"verify failed: {type(e).__name__}: {e}")
-    updated = store.patch_raw(agent_id, {"readiness": readiness.model_dump()})
+    changes: dict = {"readiness": readiness.model_dump()}
+    # Capture the resolved experiment id so the Library can link to it. Best
+    # effort — never fail verify over it.
+    try:
+        exp_id = resolve_experiment_id(w, agent)
+        if exp_id:
+            changes["experiment_id"] = exp_id
+    except Exception:
+        pass
+    updated = store.patch_raw(agent_id, changes)
     return updated or agent
 
 
@@ -249,6 +269,7 @@ def deploy(req: DeployRequest, request: Request) -> DeployResult:
             workspace=result.user,
             model=req.model,
             endpoint=req.endpoint,
+            bundle_path=result.workspace_path,   # deployed DAB folder (for the Library link)
             tools=tools,
         )
         if existing is None:

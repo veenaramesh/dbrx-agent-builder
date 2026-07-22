@@ -38,6 +38,8 @@ export interface RegistryAgent {
   endpoint: string;
   app_url: string;
   experiment: string;
+  experiment_id: string;
+  bundle_path: string;
   model: string;
   workspace: string;
   stage: Stage;
@@ -55,6 +57,8 @@ export interface AgentInput {
   name: string;
   endpoint?: string;
   app_url?: string;
+  experiment?: string;
+  bundle_path?: string;
   model?: string;
   workspace?: string;
   tools?: ToolRef[];
@@ -126,5 +130,18 @@ export async function backendAvailable(): Promise<boolean> {
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+export interface WorkspaceConfig {
+  host: string; // workspace base URL, '' when unknown
+}
+
+// Workspace context for building deep links (folder, experiment, endpoint).
+export async function getConfig(): Promise<WorkspaceConfig> {
+  try {
+    return json<WorkspaceConfig>(await fetch(url('/api/config')));
+  } catch {
+    return { host: '' };
   }
 }
