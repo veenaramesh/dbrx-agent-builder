@@ -1,112 +1,56 @@
-# Deploying Agent Brick Builder as a Databricks App
+# Hosting Agent Brick Builder on GitHub Pages
 
-This deploys the builder **itself** as a Databricks App — the UI and its
-FastAPI backend served from one origin. (This is separate from the agents a
-user builds and deploys *with* the tool.)
+The builder is a **static, client-side app** — all bundle generation happens in
+the browser (no backend). It's hosted on GitHub Pages.
 
-Phase A scope: the App serves the existing Builder and Agent Library. The
-Library reads its registry backend (or sample data when empty). On-behalf-of
-deploy and live eval/serving status arrive in later phases — see
-[agent-app-plan.md](./agent-app-plan.md).
+> Observing deployed agents lives in a separate app (`dbrx-agent-library`).
+> Designing/rendering a bundle is all this tool does.
 
-## Prerequisites
+## How it deploys
 
-- [Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html)
-  authenticated to your workspace (`databricks auth login`).
-- [Node.js](https://nodejs.org/) ≥ 20 (to build the client locally — the App
-  runtime is Python-only and cannot run npm).
-- Apps enabled in your workspace.
+`.github/workflows/deploy.yml` builds `agent-builder/client` and publishes
+`dist/` to Pages on every push to `main`. The production build uses the base
+path `/dbrx-agent-builder/` (see `client/vite.config.ts`), and a `404.html`
+copy of `index.html` provides the SPA fallback for deep links / refreshes.
 
-## 1. Build the client
+Enable it once in the repo: **Settings → Pages → Build and deployment →
+Source: GitHub Actions**.
 
-The Databricks Apps runtime installs `requirements.txt` and runs `app.yaml`'s
-command, but it does **not** build the frontend. Build it first so
-`client/dist` exists and ships with the App:
+Live at: https://veenaramesh.github.io/dbrx-agent-builder/
 
-```bash
-cd agent-builder
-./scripts/build.sh
-```
+## What the "Download bundle" button produces
 
-This runs the client build with `VITE_BASE=/` so assets resolve from the App
-root. Output: `agent-builder/client/dist`.
+With no backend, the primary action downloads a ZIP containing:
 
-## 2. Deploy the App
+- `config.json` — the agentops-stacks DAB template answers file
+- `agents_manifest.json` — full manifest of agents + shared components
+- `README.md` — the exact commands to run
+- a CI/CD workflow file (if enabled)
 
-From the `agent-builder` directory (the App root — it contains `app.yaml`,
-`requirements.txt`, `server/`, and the built `client/dist`):
+The user then runs, as themselves:
 
 ```bash
-# First time: create the app
-databricks apps create agent-brick-builder
-
-# Upload source + built client, then deploy.
-# NOTE: `databricks sync` honors .gitignore, which excludes client/dist. Pass
-# --include 'client/dist/**' so the built frontend actually uploads — without
-# it the App starts but serves no UI.
-databricks sync . /Workspace/Users/<you>/agent-brick-builder-src \
-  --include 'client/dist/**'
-databricks apps deploy agent-brick-builder \
-  --source-code-path /Workspace/Users/<you>/agent-brick-builder-src
+databricks bundle init https://github.com/databricks-solutions/agentops-stacks \
+  --config-file config.json
+databricks bundle deploy -t dev
 ```
 
-The App starts `python server/app.py`, which binds `DATABRICKS_APP_PORT` and
-serves both the API (`/api/...`) and the built client (everything else, with
-SPA fallback so `/library` deep-links work).
+(Requires Databricks CLI **v1.1.0+**, the template's minimum.)
 
-## 3. Configuration
+## Optional: write directly to a workspace (backend mode)
 
-`app.yaml` sets environment variables:
+The client keeps a `deployToWorkspace()` path that writes the bundle straight
+into the user's workspace via a backend. It's **inactive on Pages** and only
+engages when `VITE_API_URL` is set at build time (pointing at a FastAPI backend
+exposing `POST /api/deploy`). Not needed for the static hosting above.
 
-| Var | Purpose |
-|---|---|
-| `AGENT_REGISTRY_PATH` | Where the Library registry JSON lives. **For durability across restarts, point this at a mounted UC volume** — the default (`data/registry.json`) lives in the container and is lost on redeploy. |
-
-## 4. Grant workspace scope for "Deploy to Workspace"
-
-The **Deploy to Workspace** button writes the rendered DAB into the logged-in
-user's workspace on their behalf. That requires the `workspace` user-auth scope
-on the app — by default an app only gets `iam.current-user:read` /
-`iam.access-control:read`, so workspace writes return
-`403 Invalid scope, required scopes: workspace`.
-
-Grant it once, then redeploy (users re-consent on next login):
+## Local development
 
 ```bash
-databricks apps update agent-brick-builder --json \
-  '{"name":"agent-brick-builder","user_api_scopes":["workspace.workspace:read","workspace.workspace:write"]}'
-databricks apps deploy agent-brick-builder \
-  --source-code-path /Workspace/Users/<you>/agent-brick-builder-src
+cd agent-builder/client
+npm install
+npm run dev        # serves at http://localhost:3001
+
+# preview a production (Pages-base) build:
+npm run build && npm run preview
 ```
-
-Verify with `databricks apps get agent-brick-builder` — `effective_user_api_scopes`
-should include `workspace.workspace:write` after a user has logged in and
-consented via the browser.
-
-> Note: the scoped token is minted during the **browser SSO flow**. Calling
-> `/api/deploy` with a raw CLI/PAT token (e.g. via curl) forwards that token
-> unchanged and will still 403 — test Deploy from the app UI in a browser.
-
-## Notes / known limitations (Phase A)
-
-- **CDN dependencies.** The client currently loads Tailwind and Google Fonts
-  from public CDNs. The App's browser context needs outbound access to them,
-  or the UI styling degrades. Bundling these locally is a follow-up.
-- **Registry durability.** Until `AGENT_REGISTRY_PATH` points at a volume,
-  redeploying resets the registry.
-- **Auth.** Phase A serves the UI/registry only. Writing DABs into a user's
-  workspace on-behalf-of the user (OBO) comes in Phase B/C.
-
-## Local development (unchanged)
-
-You don't need the App to develop:
-
-```bash
-# backend
-cd agent-builder/server && uvicorn app:app --reload --port 8001
-# client (separate terminal)
-cd agent-builder/client && npm run dev
-```
-
-The client's `.env.local` points at `http://localhost:8001`; the Library falls
-back to sample data if the backend isn't running.

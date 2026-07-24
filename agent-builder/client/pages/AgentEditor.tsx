@@ -23,8 +23,14 @@ import {
   generateBezierPath,
   isNodeIntersectingRect,
 } from '../utils';
-import { buildBundleConfig, buildAgentOpsStacksConfig, buildProjectFiles, generateCICDWorkflow } from '../codegen/project';
+import { buildBundleConfig, buildAgentOpsStacksConfig, buildProjectFiles, downloadProjectZip, generateCICDWorkflow } from '../codegen/project';
 import { deployToWorkspace, DeployResult } from '../api/deploy';
+
+// When a backend is configured (VITE_API_URL), the builder can write the bundle
+// straight into the user's workspace. On a static host (GitHub Pages) there is
+// no backend, so the builder downloads the bundle for the user to `bundle init`
+// + `bundle deploy` themselves.
+const API_CONFIGURED = Boolean(import.meta.env.VITE_API_URL);
 import { NodeView } from '../components/NodeView';
 import { GroupView, ResizeCorner } from '../components/GroupView';
 import { EdgeView } from '../components/EdgeView';
@@ -671,6 +677,12 @@ export function AgentEditor() {
     setDeployError(null);
     setDeployResult(null);
     try {
+      // Static host (no backend): download the bundle for the user to deploy.
+      if (!API_CONFIGURED) {
+        await downloadProjectZip(nodes, edges, agentName, undefined, projectSettings);
+        setIsDeploying(false);
+        return;
+      }
       const { projectName, initialAgentName, files, agents } =
         buildProjectFiles(nodes, edges, agentName, undefined, projectSettings);
       const initial = agents[0];
@@ -684,11 +696,12 @@ export function AgentEditor() {
         files,
       });
       setDeployResult(result);
+      setShowDeployResult(true);
     } catch (e) {
       setDeployError(e instanceof Error ? e.message : 'Deploy failed.');
+      setShowDeployResult(true);
     } finally {
       setIsDeploying(false);
-      setShowDeployResult(true);
     }
   };
 

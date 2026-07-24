@@ -34,6 +34,13 @@ jobs:
         working-directory: agent-builder/client
         run: npm run build
 
+      # SPA fallback: GitHub Pages has no server-side rewrite, so a hard refresh
+      # or deep link 404s. Serving the same app as 404.html makes the client
+      # router handle the route instead.
+      - name: Add SPA 404 fallback
+        working-directory: agent-builder/client
+        run: cp dist/index.html dist/404.html
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

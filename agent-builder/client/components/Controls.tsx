@@ -4,8 +4,12 @@ import {
   Cpu, Search, Wrench, X, Copy, Check,
   ChevronDown, ChevronRight, Code2, Trash2, Copy as CopyIcon,
   Loader2, Square, Database, Settings,
-  Rocket, ArrowRight, ShieldCheck, FlaskConical,
+  Rocket, ArrowRight, ShieldCheck, FlaskConical, Download,
 } from 'lucide-react';
+
+// Backend configured (VITE_API_URL) → deploy into the workspace; otherwise
+// (static host like GitHub Pages) → download the bundle to deploy manually.
+const API_CONFIGURED = Boolean(import.meta.env.VITE_API_URL);
 import { ToolType, AgentNodeData, AgentNodeType, LLMConfig, VectorSearchConfig, UCFunctionConfig, GroupConfig, LakebaseConfig, ProjectSettings, CICDConfig, CICDProvider, PromotionGate, CICDEnvironment, CloudProvider, MemoryType, EvalDatasetSource } from '../types';
 import { NODE_COLORS, DEFAULT_NODE_SIZE, DEFAULT_CONFIGS, DEFAULT_CICD_CONFIG } from '../constants';
 
@@ -167,15 +171,21 @@ export const Header: React.FC<HeaderProps> = ({
         Export Code
       </button>
 
-      {/* Deploy to Workspace */}
+      {/* Deploy to Workspace (backend) / Download bundle (static host) */}
       <button
         onClick={onDeploy}
         disabled={isDeploying}
         className="flex items-center gap-2 px-3 h-8 bg-[#FF3621] hover:bg-[#e02d1a] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors"
-        title="Write the DAB into your Databricks workspace"
+        title={API_CONFIGURED
+          ? 'Write the DAB into your Databricks workspace'
+          : 'Download the bundle, then run `databricks bundle init` + `bundle deploy`'}
       >
-        {isDeploying ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
-        {isDeploying ? 'Deploying…' : 'Deploy to Workspace'}
+        {isDeploying
+          ? <Loader2 size={14} className="animate-spin" />
+          : API_CONFIGURED ? <Rocket size={14} /> : <Download size={14} />}
+        {isDeploying
+          ? (API_CONFIGURED ? 'Deploying…' : 'Preparing…')
+          : (API_CONFIGURED ? 'Deploy to Workspace' : 'Download bundle')}
       </button>
     </div>
   );
