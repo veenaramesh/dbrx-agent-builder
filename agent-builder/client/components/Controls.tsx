@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import {
   MousePointer2, Hand, Cable, Undo2, Redo2,
   Cpu, Search, Wrench, X, Copy, Check,
@@ -87,24 +86,6 @@ export const Header: React.FC<HeaderProps> = ({
           Agent Brick <span className="text-[#FF3621]">Builder</span>
         </span>
       </div>
-
-      <div className="w-px h-[22px] bg-[#34606f] mx-1" />
-
-      {/* Tab switcher */}
-      <nav className="flex items-center gap-1">
-        <Link
-          to="/"
-          className="px-3 h-8 flex items-center rounded-md text-[12px] font-medium bg-[#FF3621] text-white"
-        >
-          Builder
-        </Link>
-        <Link
-          to="/library"
-          className="px-3 h-8 flex items-center rounded-md text-[12px] font-medium text-white/60 hover:bg-[#243f49] hover:text-white transition-all"
-        >
-          Agent Library
-        </Link>
-      </nav>
 
       <div className="w-px h-[22px] bg-[#34606f] mx-1" />
 

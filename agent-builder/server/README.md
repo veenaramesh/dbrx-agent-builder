@@ -1,7 +1,10 @@
-# Agent Library backend
+# Agent Brick Builder backend
 
-Thin FastAPI service backing the **Agent Library** tab: a registry of agents
-and the components they use. Phase 1 stores the registry in a JSON file.
+Thin FastAPI service backing the builder. It renders an agentops-stacks bundle
+from the canvas and writes it into the user's workspace.
+
+Observability of deployed agents is a separate read-only app
+(`dbrx-agent-library`) — there is no registry or readiness logic here.
 
 ## Run locally
 
@@ -13,30 +16,22 @@ uvicorn app:app --reload --port 8001
 ```
 
 The client's `.env.local` already points at `http://localhost:8001`
-(`VITE_API_URL`). Start the client (`npm run dev` in `agent-builder/client`)
-and the Agent Library tab will read/write live registry data. If the backend
-is not running, the tab falls back to sample data.
+(`VITE_API_URL`). Start the client (`npm run dev` in `agent-builder/client`).
 
 ## API
 
-| Method | Path                      | Purpose                          |
-|--------|---------------------------|----------------------------------|
-| GET    | `/api/health`             | liveness                         |
-| GET    | `/api/agents`             | list registry entries            |
-| GET    | `/api/agents/{id}`        | one entry                        |
-| POST   | `/api/agents`             | register an agent                |
-| PATCH  | `/api/agents/{id}`        | update an entry                  |
-| DELETE | `/api/agents/{id}`        | remove an entry                  |
+| Method | Path            | Purpose                                                       |
+|--------|-----------------|---------------------------------------------------------------|
+| GET    | `/api/health`   | liveness                                                      |
+| POST   | `/api/deploy`   | expand the agentops-stacks bundle + write it to the workspace |
 
-## Storage
+`/api/deploy` runs as the app service principal. It expands the full bundle
+in-container via `databricks bundle init` (see `deploy.py`) and lands it in a
+shared workspace path; the user then runs `databricks bundle deploy` as
+themselves.
 
-Registry lives at `AGENT_REGISTRY_PATH` (default `data/registry.json`).
-On a Databricks App, set it to a mounted UC volume path so the registry
-survives restarts.
+## Databricks App deployment
 
-## Databricks App deployment (later)
-
-Build the client (`npm run build`) so `client/dist` exists; this service
-mounts it at `/` and serves UI + API from one origin (no CORS). Live status
-verification via `GET /api/2.0/serving-endpoints/{name}` (using the App's own
-service-principal auth) is a later phase.
+Build the client (`../scripts/build.sh`) so `client/dist` exists; this service
+mounts it at `/` and serves UI + API from one origin (no CORS). See
+`docs/deploy-app.md`.
